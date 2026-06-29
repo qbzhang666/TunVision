@@ -1,0 +1,5 @@
+class,iou
+Segments,1.000
+Pockets,0.974
+Leakage,0.945
+Joints,0.840

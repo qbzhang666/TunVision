@@ -1,0 +1,13 @@
+training_pool,transfer_regime,label_fraction,accuracy,macro_f1,weighted_f1,kappa,mcc,leakage_iou,mean_iou,mean_accuracy
+S3DIS,Full fine-tuning,25,0.93,0.92,0.93,0.89,0.89,87.59,89.10,96.30
+S3DIS,Full fine-tuning,50,0.96,0.95,0.96,0.93,0.94,92.62,92.80,98.10
+S3DIS,Full fine-tuning,100,0.97,0.97,0.97,0.95,0.95,94.34,93.90,98.60
+S3DIS,Linear probe,25,0.69,0.68,0.69,0.51,0.54,45.41,61.20,82.10
+S3DIS,Linear probe,50,0.86,0.86,0.86,0.78,0.79,74.92,79.50,91.30
+S3DIS,Linear probe,100,0.89,0.89,0.89,0.82,0.83,80.31,83.10,93.40
+S3DIS + ART,Full fine-tuning,25,0.95,0.95,0.95,0.92,0.93,89.22,90.40,96.80
+S3DIS + ART,Full fine-tuning,50,0.95,0.95,0.96,0.93,0.93,91.18,91.70,97.50
+S3DIS + ART,Full fine-tuning,100,0.96,0.95,0.96,0.93,0.93,92.17,92.20,97.90
+S3DIS + ART,Linear probe,25,0.83,0.84,0.84,0.75,0.78,70.02,75.30,89.00
+S3DIS + ART,Linear probe,50,0.90,0.90,0.90,0.84,0.84,81.64,84.60,93.50
+S3DIS + ART,Linear probe,100,0.90,0.91,0.91,0.86,0.86,83.25,85.20,94.10
