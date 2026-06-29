@@ -106,47 +106,101 @@ def point_cloud_figure(cloud: pd.DataFrame, color_by: str | None) -> go.Figure:
 
 def workflow_figure() -> go.Figure:
     nodes = [
-        ("Evidence", 0.05, 0.78, "ART and S3DIS scans<br>leakage evidence<br>standards corpus"),
-        ("Preprocess", 0.25, 0.78, "cleaning<br>ring partitioning<br>XYZ/RGB/normal features"),
-        ("Sonata", 0.45, 0.78, "self-supervised encoder<br>upcasting<br>linear segmentation head"),
-        ("Deformation", 0.65, 0.78, "PCA alignment<br>fixed-radius fit<br>multi-zone polynomial"),
-        ("Decision", 0.85, 0.78, "FMEA rules<br>health grade<br>maintenance tier"),
+        ("Step 1", "Multimodal Evidence Base", 0.22, 0.78, "#e8f1fb", "ART reference scans<br>S3DIS operational scans<br>CJJ/T and GB standards"),
+        ("Step 2", "Point-Cloud Curation", 0.78, 0.78, "#fff6e6", "denoise and invert removal<br>annotation<br>25 / 50 / 100% labels"),
+        ("Step 3", "Perception-Knowledge Engine", 0.78, 0.28, "#e5f5f2", "Sonata leakage segmentation<br>PCA to multi-zone polynomial<br>LLM FMEA extraction"),
+        ("Step 4", "Standards-Grounded Prescription", 0.22, 0.28, "#eee9fb", "per-ring health grade<br>maintenance perception<br>re-inspection loop"),
     ]
     fig = go.Figure()
-    for idx, (title, x, y, body) in enumerate(nodes, start=1):
+    for idx, (step, title, x, y, fill, body) in enumerate(nodes):
         fig.add_shape(
             type="rect",
-            x0=x - 0.085,
-            x1=x + 0.085,
-            y0=y - 0.16,
-            y1=y + 0.16,
-            line={"color": "#94a3b8", "width": 1.4},
-            fillcolor="#f8fafc",
+            x0=x - 0.18,
+            x1=x + 0.18,
+            y0=y - 0.14,
+            y1=y + 0.14,
+            line={"color": "#64748b", "width": 1.5},
+            fillcolor=fill,
             layer="below",
         )
-        fig.add_annotation(x=x, y=y + 0.075, text=f"<b>Stage {idx}</b><br>{title}", showarrow=False, font={"size": 13})
-        fig.add_annotation(x=x, y=y - 0.055, text=body, showarrow=False, font={"size": 11, "color": "#475569"})
-        if idx < len(nodes):
-            next_x = nodes[idx][1]
-            fig.add_annotation(
-                x=next_x - 0.095,
-                y=y,
-                ax=x + 0.095,
-                ay=y,
-                xref="x",
-                yref="y",
-                axref="x",
-                ayref="y",
-                showarrow=True,
-                arrowhead=3,
-                arrowwidth=2,
-                arrowcolor="#2563eb",
-            )
-    fig.add_shape(type="line", x0=0.44, x1=0.68, y0=0.52, y1=0.52, line={"color": "#64748b", "dash": "dot"})
-    fig.add_annotation(x=0.56, y=0.47, text="perceptual + geometric evidence", showarrow=False, font={"size": 11, "color": "#475569"})
+        fig.add_annotation(x=x, y=y + 0.065, text=f"<b>{step}: {title}</b>", showarrow=False, font={"size": 15})
+        fig.add_annotation(x=x, y=y - 0.045, text=body, showarrow=False, font={"size": 12, "color": "#334155"})
+
+    arrows = [
+        ((0.40, 0.78), (0.60, 0.78), "Preprocessing"),
+        ((0.78, 0.64), (0.78, 0.42), "Fine-tuning"),
+        ((0.60, 0.28), (0.40, 0.28), "Fusing and grading"),
+        ((0.22, 0.42), (0.22, 0.64), "Re-inspecting"),
+    ]
+    for (ax, ay), (x, y), label in arrows:
+        fig.add_annotation(
+            x=x,
+            y=y,
+            ax=ax,
+            ay=ay,
+            xref="x",
+            yref="y",
+            axref="x",
+            ayref="y",
+            showarrow=True,
+            arrowhead=3,
+            arrowwidth=2.5,
+            arrowcolor="#334155",
+        )
+        fig.add_annotation(x=(ax + x) / 2, y=(ay + y) / 2 + 0.045, text=f"<i>{label}</i>", showarrow=False, font={"size": 12, "color": "#475569"})
+
+    fig.add_shape(type="circle", x0=0.455, x1=0.545, y0=0.455, y1=0.545, line={"color": "#64748b", "width": 2}, fillcolor="#ffffff")
+    fig.add_annotation(x=0.5, y=0.5, text="<b>DT<br>Loop</b>", showarrow=False, font={"size": 13, "color": "#0f172a"})
     fig.update_xaxes(visible=False, range=[0, 1])
-    fig.update_yaxes(visible=False, range=[0.35, 1])
-    fig.update_layout(height=360, margin={"l": 10, "r": 10, "t": 20, "b": 10}, plot_bgcolor="white")
+    fig.update_yaxes(visible=False, range=[0.05, 1])
+    fig.update_layout(height=520, margin={"l": 10, "r": 10, "t": 20, "b": 10}, plot_bgcolor="white")
+    return fig
+
+
+def curation_pipeline_figure(label_fraction: int, transfer_regime: str) -> go.Figure:
+    stages = [
+        ("Raw scan", 0.12, "#e5e7eb"),
+        ("Denoise", 0.32, "#dbeafe"),
+        ("Annotate", 0.52, "#fef3c7"),
+        (f"{label_fraction}% labels", 0.72, "#dcfce7"),
+        (transfer_regime, 0.90, "#fee2e2" if "fine" in transfer_regime.lower() else "#e0f2fe"),
+    ]
+    fig = go.Figure()
+    theta = np.linspace(-0.82 * np.pi, 0.82 * np.pi, 60)
+    for i, (label, x, color) in enumerate(stages):
+        for ring in range(8):
+            radius = 0.055 + 0.004 * np.sin(theta * 3 + ring)
+            xs = x + (ring - 3.5) * 0.01 + radius * np.cos(theta)
+            ys = 0.52 + radius * np.sin(theta)
+            fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines", line={"color": "#64748b", "width": 1}, showlegend=False, hoverinfo="skip"))
+        fig.add_shape(type="rect", x0=x - 0.085, x1=x + 0.085, y0=0.34, y1=0.72, fillcolor=color, opacity=0.35, line_width=0, layer="below")
+        fig.add_annotation(x=x, y=0.78, text=f"<b>{label}</b>", showarrow=False, font={"size": 12})
+        if i < len(stages) - 1:
+            fig.add_annotation(x=stages[i + 1][1] - 0.095, y=0.52, ax=x + 0.095, ay=0.52, showarrow=True, arrowhead=3, arrowwidth=2, arrowcolor="#b7791f")
+    fig.update_xaxes(visible=False, range=[0, 1])
+    fig.update_yaxes(visible=False, range=[0.22, 0.88])
+    fig.update_layout(height=280, margin={"l": 10, "r": 10, "t": 10, "b": 10}, plot_bgcolor="white")
+    return fig
+
+
+def engine_stream_figure() -> go.Figure:
+    fig = go.Figure()
+    streams = [
+        ("A", "Sonata segmentation", "Leakage area", 0.18, "#dbeafe"),
+        ("B", "Geometric reconstruction", "Per-ring deformation", 0.50, "#fee2e2"),
+        ("C", "LLM FMEA extraction", "51-rule FMEA base", 0.82, "#dcfce7"),
+    ]
+    for letter, title, output, x, fill in streams:
+        fig.add_shape(type="rect", x0=x - 0.13, x1=x + 0.13, y0=0.50, y1=0.82, fillcolor=fill, line={"color": "#94a3b8"})
+        fig.add_annotation(x=x, y=0.73, text=f"<b>{letter}. {title}</b>", showarrow=False, font={"size": 13})
+        fig.add_annotation(x=x, y=0.58, text=output, showarrow=False, font={"size": 12, "color": "#334155"})
+        fig.add_annotation(x=0.5, y=0.30, ax=x, ay=0.50, xref="x", yref="y", axref="x", ayref="y", showarrow=True, arrowhead=3, arrowwidth=2, arrowcolor="#2f855a")
+    fig.add_shape(type="circle", x0=0.455, x1=0.545, y0=0.22, y1=0.38, fillcolor="#ecfeff", line={"color": "#0f766e", "width": 2})
+    fig.add_annotation(x=0.5, y=0.30, text="<b>Reasoning<br>engine</b>", showarrow=False, font={"size": 12})
+    fig.add_annotation(x=0.5, y=0.12, text="<i>Two perception streams + knowledge stream</i>", showarrow=False, font={"size": 13, "color": "#0f766e"})
+    fig.update_xaxes(visible=False, range=[0, 1])
+    fig.update_yaxes(visible=False, range=[0.05, 0.9])
+    fig.update_layout(height=330, margin={"l": 10, "r": 10, "t": 10, "b": 10}, plot_bgcolor="white")
     return fig
 
 
@@ -354,64 +408,70 @@ st.markdown(
 
 tabs = st.tabs(
     [
-        "Workflow",
-        "Point Cloud + ML",
-        "Deformation Reconstruction",
-        "Decision Dashboard",
-        "Ring Evidence",
-        "Rule Base",
+        "Step 1 Evidence Base",
+        "Step 2 Point-Cloud Curation",
+        "Step 3 Perception-Knowledge Engine",
+        "Step 4 Prescription",
     ]
 )
 
 with tabs[0]:
-    st.markdown("#### Paper workflow implemented in TunVision")
-    stages = [
-        ("Stage 1", "Multimodal Evidence Base", "ART + S3DIS point clouds, image/leakage evidence, and maintenance standards."),
-        ("Stage 2", "Preprocessing", "CloudCompare cleaning, ring partitioning, feature preparation, and train/test split."),
-        ("Stage 3", "Point-Cloud Segmentation", "Sonata encoder with upcasting and a linear segmentation head for leakage, joints, segments, and pockets."),
-        ("Stage 4", "Geometric Evaluation", "PCA alignment, robust fixed-radius fitting, multi-zone polynomial reconstruction, and deformation indicators."),
-        ("Stage 5", "Prescriptive Reasoning", "Schema-guided FMEA extraction and max-severity fusion of leakage and deformation channels."),
-    ]
-    cols = st.columns(5)
-    for col, (num, title, copy) in zip(cols, stages):
-        with col:
-            st.markdown(
-                f"""
-                <div class="stage-box">
-                    <div class="stage-num">{num}</div>
-                    <div class="stage-title">{title}</div>
-                    <div class="stage-copy">{copy}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
+    st.markdown("#### Step 1: Multimodal Evidence Base")
     st.plotly_chart(workflow_figure(), use_container_width=True)
 
-with tabs[1]:
-    st.markdown("#### Point-cloud perception and machine-learning stage")
-    st.write(
-        "This tab mirrors the paper's perception branch: cleaned tunnel point clouds are segmented by Sonata into "
-        "leakage, joints, segments, and pockets. TunVision ingests exported model evidence and can preview XYZ/CSV point clouds."
-    )
-
-    left, right = st.columns([1.25, 1])
-    with left:
+    e1, e2, e3 = st.columns(3)
+    with e1:
+        st.markdown("##### Field evidence")
+        st.metric("Reference tunnel", "ART", "structural transfer source")
+        st.metric("Operational tunnel", "S3DIS / Nanjing Line 2", "held-out decision target")
         if point_cloud is not None:
             numeric_cols = point_cloud.select_dtypes(include=np.number).columns.tolist()
             color_options = [None] + [col for col in numeric_cols if col not in {"x", "y", "z"}]
-            color_by = st.selectbox("Colour point-cloud preview by", color_options, format_func=lambda x: "None" if x is None else x)
+            color_by = st.selectbox("Colour uploaded cloud by", color_options, format_func=lambda x: "None" if x is None else x)
             st.plotly_chart(point_cloud_figure(point_cloud, color_by), use_container_width=True)
         else:
-            st.plotly_chart(sonata_architecture_figure(), use_container_width=True)
-            st.info("Upload a CSV/TXT/XYZ point cloud in the sidebar to preview scan evidence here.")
+            st.info("Upload a CSV/TXT/XYZ point cloud in the sidebar to preview field evidence.")
+    with e2:
+        st.markdown("##### Leakage evidence")
+        st.dataframe(leakage, hide_index=True, use_container_width=True)
+        leakage_fig = px.bar(
+            leakage,
+            x="tunnel",
+            y="leakage_area_m2",
+            color="leakage_level",
+            text="leakage_class",
+            color_continuous_scale=["#2f855a", "#b7791f", "#c05621", "#c53030"],
+            labels={"leakage_area_m2": "Leakage area (m2)", "tunnel": "Tunnel"},
+            title="Vision/leakage channel evidence",
+        )
+        st.plotly_chart(leakage_fig, use_container_width=True)
+    with e3:
+        st.markdown("##### Domain knowledge")
+        st.metric("Health scale", "1-5", "CJJ/T 289")
+        st.metric("Rule chains", "51", "FMEA base")
+        st.metric("Loaded grading rules", len(ruleset.get("rules", [])))
+        for rule in ruleset["rules"]:
+            st.caption(f"{rule['label']}: {rule['source_reference']}")
 
-    with right:
-        best = performance.sort_values("leakage_iou", ascending=False).iloc[0]
-        st.metric("Best leakage IoU", f"{best['leakage_iou']:.2f}%", best["training_pool"])
-        st.metric("Best mean accuracy", f"{best['mean_accuracy']:.2f}%")
-        st.metric("Classes", "4", "leakage, joints, segments, pockets")
-        st.dataframe(class_iou, hide_index=True, use_container_width=True)
+with tabs[1]:
+    st.markdown("#### Step 2: Point-Cloud Curation")
+    c1, c2 = st.columns([1.1, 0.9])
+    with c1:
+        selected_fraction = st.segmented_control("Label fraction", [25, 50, 100], default=25)
+        selected_regime = st.segmented_control("Transfer regime", ["Full fine-tuning", "Linear probe"], default="Full fine-tuning")
+        selected_pool = st.segmented_control("Training pool", ["S3DIS", "S3DIS + ART"], default="S3DIS")
+        st.plotly_chart(curation_pipeline_figure(int(selected_fraction), selected_regime), use_container_width=True)
+    with c2:
+        filtered_perf = performance[
+            performance["label_fraction"].eq(selected_fraction)
+            & performance["transfer_regime"].eq(selected_regime)
+            & performance["training_pool"].eq(selected_pool)
+        ]
+        record = filtered_perf.iloc[0] if not filtered_perf.empty else performance.iloc[0]
+        st.metric("Expected leakage IoU", f"{record['leakage_iou']:.2f}%")
+        st.metric("Accuracy", f"{record['accuracy']:.2f}")
+        st.metric("Macro F1", f"{record['macro_f1']:.2f}")
+        st.metric("MCC", f"{record['mcc']:.2f}")
 
     perf_fig = px.line(
         performance,
@@ -421,56 +481,44 @@ with tabs[1]:
         line_dash="transfer_regime",
         markers=True,
         labels={"label_fraction": "Label fraction (%)", "leakage_iou": "Leakage IoU (%)"},
-        title="Leakage IoU across transfer regimes and label fractions",
+        title="Curation impact on leakage segmentation performance",
     )
     st.plotly_chart(perf_fig, use_container_width=True)
     st.dataframe(performance, hide_index=True, use_container_width=True)
 
 with tabs[2]:
-    st.markdown("#### Multi-zone polynomial deformation reconstruction")
-    st.write(
-        "The deformation branch reduces each reconstructed ring to clearance convergence, ovalization, joint dislocation, "
-        "joint rotation, and fit quality before standards-based grading."
-    )
+    st.markdown("#### Step 3: Perception-Knowledge Engine")
+    st.plotly_chart(engine_stream_figure(), use_container_width=True)
 
-    metric_cols = st.columns(5)
-    metric_cols[0].metric("Mean convergence", f"{rings['convergence_per_mille_d'].mean():.2f} per mille D")
-    metric_cols[1].metric("Max ovalization", f"{rings['ovalization_mm'].max():.1f} mm")
-    metric_cols[2].metric("Max dislocation", f"{rings['max_joint_dislocation_mm'].max():.1f} mm")
-    metric_cols[3].metric("Max rotation", f"{rings['max_joint_rotation_deg'].max():.2f} deg")
-    metric_cols[4].metric("Mean fit RMSE", f"{rings['fit_rmse_mm'].mean():.2f} mm")
-
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        deformation_fig = px.line(
-            rings,
-            x="ring",
-            y=["convergence_per_mille_d", "ovalization_mm", "max_joint_dislocation_mm", "max_joint_rotation_deg"],
-            facet_col="tunnel",
-            markers=True,
-            labels={"value": "Value", "variable": "Indicator"},
-            title="Per-ring deformation indicators from Table 9",
-        )
-        st.plotly_chart(deformation_fig, use_container_width=True)
-    with c2:
+    p1, p2 = st.columns([1, 1])
+    with p1:
+        st.markdown("##### A. Sonata point-cloud segmentation")
+        st.plotly_chart(sonata_architecture_figure(), use_container_width=True)
+        class_fig = px.bar(class_iou, x="class", y="iou", color="class", title="Class IoU from segmentation output")
+        class_fig.update_yaxes(range=[0, 1.05])
+        st.plotly_chart(class_fig, use_container_width=True)
+    with p2:
+        st.markdown("##### B. Geometric reconstruction")
         surface_metric = st.selectbox(
-            "Colour generated lining surface by",
+            "Surface colour metric",
             ["convergence_per_mille_d", "ovalization_mm", "max_joint_dislocation_mm", "max_joint_rotation_deg"],
         )
-        st.plotly_chart(
-            tunnel_surface_figure(rings, surface_metric, "Generated 3D lining surface from ring indicators"),
-            use_container_width=True,
-        )
+        st.plotly_chart(tunnel_surface_figure(rings, surface_metric, "Generated 3D lining surface from ring indicators"), use_container_width=True)
 
-    o1, o2 = st.columns([1, 1])
-    with o1:
+    k1, k2 = st.columns([1, 1])
+    with k1:
+        st.markdown("##### C. FMEA knowledge stream")
+        for rule in ruleset["rules"]:
+            with st.expander(f"{rule['label']} - {rule['source_reference']}"):
+                st.dataframe(pd.DataFrame(rule["bands"]), use_container_width=True, hide_index=True)
+    with k2:
+        st.markdown("##### Validation and deformation diagnostics")
         st.plotly_chart(ovalization_agreement_figure(ovalization), use_container_width=True)
-    with o2:
         selected_profile_tunnel = st.radio("Radial profile tunnel", sorted(rings["tunnel"].unique()), horizontal=True)
         st.plotly_chart(radial_profile_figure(rings, int(selected_profile_tunnel)), use_container_width=True)
 
 with tabs[3]:
-    st.markdown("#### Tunnel-level prescription")
+    st.markdown("#### Step 4: Standards-Grounded Prescription")
     cards = st.columns(len(summary))
     for card, record in zip(cards, summary.to_dict("records")):
         with card:
@@ -487,6 +535,44 @@ with tabs[3]:
                 unsafe_allow_html=True,
             )
 
+    selected_tunnels = st.multiselect("Tunnel", options=sorted(graded["tunnel"].unique()), default=sorted(graded["tunnel"].unique()))
+    view = graded[graded["tunnel"].isin(selected_tunnels)]
+
+    heatmap_data = view.pivot(index="tunnel", columns="ring", values="ring_health_level")
+    heatmap = px.imshow(
+        heatmap_data,
+        color_continuous_scale=["#2f855a", "#b7791f", "#c05621", "#c53030", "#742a2a"],
+        zmin=1,
+        zmax=5,
+        text_auto=True,
+        labels={"x": "Ring", "y": "Tunnel", "color": "Health level"},
+        title="Per-ring health grade (1-5)",
+        aspect="auto",
+    )
+    st.plotly_chart(heatmap, use_container_width=True)
+
+    st.dataframe(
+        view[
+            [
+                "tunnel",
+                "ring",
+                "convergence_per_mille_d",
+                "conv_level",
+                "conv_band",
+                "dislocation_mm",
+                "dislocation_level",
+                "dislocation_band",
+                "ring_health_level",
+                "ring_tier",
+                "ring_action",
+                "governing_deformation_indicator",
+            ]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown("##### Tunnel-level prescription summary")
     st.dataframe(
         summary[
             [
@@ -499,94 +585,25 @@ with tabs[3]:
                 "leakage_level",
                 "overall_tier",
                 "governing_channel",
+                "prescription",
             ]
         ],
         use_container_width=True,
         hide_index=True,
     )
 
-    fig = px.bar(
-        graded,
-        x="ring",
-        y="ring_health_level",
-        color="ring_health_level",
-        facet_col="tunnel",
-        color_continuous_scale=["#2f855a", "#b7791f", "#c05621", "#c53030", "#742a2a"],
-        labels={"ring": "Ring", "ring_health_level": "Health level"},
-        title="Ring health levels along each tunnel",
-    )
-    fig.update_yaxes(dtick=1, range=[0, 5])
-    st.plotly_chart(fig, use_container_width=True)
-
-    decision_heatmap = graded.pivot(index="tunnel", columns="ring", values="ring_health_level")
-    heatmap = px.imshow(
-        decision_heatmap,
-        color_continuous_scale=["#2f855a", "#b7791f", "#c05621", "#c53030", "#742a2a"],
-        zmin=1,
-        zmax=5,
-        labels={"x": "Ring", "y": "Tunnel", "color": "Health level"},
-        title="Generated ring health heatmap",
-        aspect="auto",
-    )
-    st.plotly_chart(heatmap, use_container_width=True)
-
-with tabs[4]:
-    st.markdown("#### Clause-traceable ring grading")
-    selected_tunnels = st.multiselect(
-        "Tunnel",
-        options=sorted(graded["tunnel"].unique()),
-        default=sorted(graded["tunnel"].unique()),
-    )
-    view = graded[graded["tunnel"].isin(selected_tunnels)]
-    st.dataframe(
-        view[
-            [
-                "tunnel",
-                "ring",
-                "convergence_per_mille_d",
-                "ovalization_mm",
-                "max_joint_dislocation_mm",
-                "max_joint_rotation_deg",
-                "fit_rmse_mm",
-                "conv_level",
-                "conv_band",
-                "dislocation_mm",
-                "dislocation_level",
-                "dislocation_band",
-                "ring_health_level",
-                "ring_tier",
-                "governing_deformation_indicator",
-            ]
-        ],
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    chart = px.line(
-        view,
-        x="ring",
-        y=["convergence_per_mille_d", "dislocation_mm"],
-        facet_col="tunnel",
-        markers=True,
-        labels={"value": "Indicator value", "variable": "Indicator", "ring": "Ring"},
-        title="Deformation indicators before standards-based grading",
-    )
-    st.plotly_chart(chart, use_container_width=True)
-
-with tabs[5]:
-    st.markdown("#### Standards-grounded decision rules")
-    for rule in ruleset["rules"]:
-        with st.expander(f"{rule['label']} - {rule['source_reference']}"):
-            st.dataframe(pd.DataFrame(rule["bands"]), use_container_width=True, hide_index=True)
-    st.download_button(
-        "Download evaluated ring decisions",
-        data=graded.to_csv(index=False).encode("utf-8"),
-        file_name="tunvision_ring_decisions.csv",
-        mime="text/csv",
-    )
-    st.download_button(
-        "Download tunnel prescriptions",
-        data=summary.to_csv(index=False).encode("utf-8"),
-        file_name="tunvision_tunnel_prescriptions.csv",
-        mime="text/csv",
-    )
+    d1, d2 = st.columns(2)
+    with d1:
+        st.download_button(
+            "Download evaluated ring database",
+            data=graded.to_csv(index=False).encode("utf-8"),
+            file_name="tunvision_ring_database.csv",
+            mime="text/csv",
+        )
+    with d2:
+        st.download_button(
+            "Download tunnel prescriptions",
+            data=summary.to_csv(index=False).encode("utf-8"),
+            file_name="tunvision_tunnel_prescriptions.csv",
+            mime="text/csv",
+        )

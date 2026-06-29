@@ -2,14 +2,12 @@
 
 TunVision is a Streamlit prototype for the prescriptive shield-tunnel digital-twin workflow described in the manuscript in `Paper in Preparation/`.
 
-The app follows the paper's TunSPEC logic:
+The app follows the industry-facing four-step workflow:
 
 1. Multimodal evidence base: ART/S3DIS point clouds, leakage evidence, deformation indicators, and standards.
-2. Point-cloud preprocessing: cleaned tunnel scans, ring partitioning, and exported XYZ/CSV previews.
-3. Machine-learning perception: Sonata point-cloud segmentation for leakage, joints, segments, and pockets.
-4. Geometric reconstruction: PCA alignment, robust fixed-radius fitting, multi-zone polynomial reconstruction, and deformation indicators.
-5. Standards-grounded reasoning: FMEA severity bands with clause provenance.
-6. Prescriptive decision support: max-severity fusion of deformation and leakage channels.
+2. Point-cloud curation: denoising, invert removal, annotation, label fraction control, and transfer-regime comparison.
+3. Perception-knowledge engine: Sonata leakage segmentation, PCA to multi-zone polynomial deformation reconstruction, and LLM schema-guided FMEA extraction.
+4. Standards-grounded prescription: per-ring health grades, maintenance perception, tunnel-level intervention tier, and re-inspection support.
 
 ## Run locally
 
