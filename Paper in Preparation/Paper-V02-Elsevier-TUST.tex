@@ -1,0 +1,2187 @@
+% ============================================================
+% Elsevier TUST manuscript template
+% Journal: Tunnelling and Underground Space Technology
+% ============================================================
+\documentclass[preprint,12pt,authoryear]{elsarticle}
+
+% --- Packages ---------------------------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{calc}
+\usepackage{textcomp}
+\usepackage{textcomp}
+\usepackage{svg}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{setspace}
+\usepackage{url}
+\usepackage{xurl}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{threeparttable}
+\usepackage{amssymb}
+\usepackage{lineno}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage{subcaption}
+\geometry{a4paper, top=2cm, bottom=2cm, left=2cm, right=2cm}
+\onehalfspacing
+\linenumbers
+\hypersetup{colorlinks=false}
+\usepackage{titlesec}
+\titleformat{\subsection}{\normalfont\bfseries}{\thesubsection}{1em}{}
+% Tell the svg package where the figures live
+\svgpath{{Fig_SVG/}}
+\graphicspath{{Fig_PDF/}}
+\AtBeginEnvironment{table}{\small}
+\AtBeginEnvironment{longtable}{\small}
+
+% --- Pandoc compatibility --------------------------------------------
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setlength{\emergencystretch}{3em}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\journal{Tunnelling and Underground Space Technology}
+
+% --- Theorem-like environments ---------------------------------------
+\newtheorem{definition}{Definition}
+\newtheorem{property}{Property}
+
+% --- Listing style for SPARQL / pseudocode ---------------------------
+\lstdefinelanguage{SPARQL}{
+  morekeywords={SELECT,WHERE,PREFIX,FILTER,OPTIONAL,UNION,DISTINCT,ORDER,BY,LIMIT,a},
+  sensitive=true,morecomment=[l]{\#},morestring=[b]"
+}
+\lstset{language=SPARQL,basicstyle=\ttfamily\small,
+        frame=single,breaklines=true,xleftmargin=8pt}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{A Prescriptive Digital-Twin Framework for Shield Metro Tunnels: Multimodal Point-Cloud Perception and Standards-Grounded Reasoning for Maintenance Decision Support}
+
+\author[monash]{Mohammad Matin Rouhani}
+\author[swinburne]{Mengqi Huang}
+\author[monash]{Qian-Bing Zhang\corref{cor1}}
+\ead{qianbing.zhang@monash.edu}
+\cortext[cor1]{Corresponding author}
+
+\affiliation[monash]{organization={Department of Civil and Environmental Engineering, Monash University}, city={Clayton}, country={Australia}}
+\affiliation[swinburne]{organization={Department of Civil and Construction Engineering, Swinburne University of Technology}, city={Melbourne}, country={Australia}}
+
+\begin{abstract}
+Underground transport networks carry decades of inspection and rehabilitation liabilities, yet 
+most tunnel digital twins fall short of prescribing maintenance, focusing instead on describing 
+or forecasting conditions. This paper proposes a prescriptive multimodal digital-twin pipeline 
+for segmental shield-tunnel maintenance, which consists of three stages: point-cloud leakage 
+segmentation, geometrical deformation evaluation, and an ontology-based decision layer. Four 
+lining classes (leakage, joints, segments, and pockets) are segmented using Sonata and evaluated 
+under two transfer regimes and three label fractions with and without a supplementary Australian 
+reference tunnel. When fully fine-tuned on the in-domain Nanjing Metro data with full 
+supervision (10\% of the scanned dataset), it reached a leakage Intersection-over-Union of 94.34 
+and a mean accuracy of 98.60, outperforming nine reported point-cloud baselines, while a leakage 
+IoU of 87.59 was retained with only a quarter of the labels; cross-site data was most useful in 
+the low-label, frozen-encoder setting. A multi-zone polynomial fit was used to reconstruct each 
+ring, and these were reduced to offset-immune deformation indicators. Ovalization was cross-
+validated against an independent conic fit, yielding a mean absolute difference of 1.37 mm. 
+Using schema-guided large-language-model extraction, we populated 51 failure-mode reasoning 
+chains from the governing Chinese urban-rail standards, with every ring graded and provenance 
+retained to the source clause. Applied to two held-out tunnels, the pipeline generated 
+traceable, standard-referenced maintenance prescriptions, providing a label-efficient route from 
+raw scan to defensible decision.
+\end{abstract}
+
+\begin{keyword}
+Point cloud \sep Semantic segmentation \sep Digital twin \sep Tunnel maintenance \sep Point Transformer v3 \sep Leakage detection
+\end{keyword}
+
+\end{frontmatter}
+
+\section*{Highlights}
+\begin{itemize}
+\item 94.3\% leakage IoU, the top value across all compared point-cloud models in previous studies.
+\item 50\% of labels (approximately 5\% of scans) beat the prior best leakage IoU.
+\item Competitive 87.6\% leakage IoU from just 25\% of labels (approximately 2.5\% of scans).
+\item 51 standard-derived FMEA rules yield clause-traceable ring decisions.
+\end{itemize}
+
+\section{Introduction}\label{introduction}
+
+Underground transport infrastructure is expanding rapidly, and every new
+tunnel commissioned today carries inspection, monitoring, and
+rehabilitation liabilities spanning decades of service life. The real
+question for asset owners is not whether to maintain, but how to
+allocate finite maintenance effort across a growing portfolio of ageing
+assets with timely and traceable condition evidence. Building
+Information Modelling (BIM) partly backstops this need through as-built
+documentation, spatial indexing of inspection records, and work-order
+management. But it doesn't, by itself, translate condition observations
+into maintenance decisions. The digital twin (DT) extends BIM with live
+data connectivity and, more importantly for maintenance, a reasoning
+layer that connects the sensed state of the structure to engineering
+knowledge ~\citep{Grieves2017, Tao2019a}. Digital twin
+(DT) capabilities are typically categorised into four levels based on a
+maturity model: descriptive twins describe the current state, reflective
+(diagnostic) twins analyse historical trends and design intent,
+predictive twins forecast the future deterioration, and prescriptive
+twins determine appropriate actions based on combining condition
+assessments and intervention knowledge ~\citep{Babanagar2025,Zhu2025}. 
+Looking into recent tunnel-DT studies, a noticeable maturity
+gradient emerges: the field predominantly focuses on descriptive and
+predictive levels, while truly prescriptive twins, those that provide a
+traceable maintenance prescription rather than merely a forecast, are
+relatively scarce and largely remain conceptual.
+
+This imbalance reflects where the demanding step lies. Reaching the
+prescriptive level requires that heterogeneous condition observations be
+connected to a structured body of maintenance knowledge through which
+decision logic can be traversed automatically, and the reviewed
+literature shows that most frameworks stop short of this. Many propose
+architectures for predictive maintenance ~\citep{Khan2025, Zhao2024}
+or demonstrate high-fidelity reconstruction and visualisation ~\citep{Cui2026, Fang2024}, and a growing number target operational
+optimisation for tunnel-boring machines ~\citep{Yang2026}. Relatively
+few close the loop from sensed defect to prescribed intervention for an
+operating lining. The most frequently reported limitation across the
+reviewed corpus is data integration and interoperability, followed by
+the unavailability of high-quality labelled data, and in particular,
+failure data, as most available records describe structures in normal
+condition. A recurring corollary is that complex defects, such as cracks
+and leakages, are difficult to model geometrically and that the matching
+of each data type to an appropriate algorithm is still unresolved. The
+collective picture is one of a field rich in predictive frameworks but
+segmented from practical, fully integrated prescriptive implementation.
+
+These obstacles motivate a multimodal approach to condition assessment.
+No single inspection modality captures the full state of a deteriorating
+lining: surface imagery and laser-scanned point clouds reveal the
+visible and geometric manifestation of a defect, while subsurface and
+internal methods reveal its extension and driver, so that different
+modalities probe different stages of the same physical process ~\citep{He2024, Zhu2025}. Yet classical signal-level fusion of these
+streams produces a sharper composite picture without producing a
+maintenance prescription: combining the data is necessary but not
+sufficient. The process of generating prescription necessitates a
+comprehensive interpretation of the outputs from various modalities,
+underpinned by engineering knowledge that links observed phenomena to
+appropriate actions. This interpretation requires the application of an
+ontology-based reasoning framework, which is consistently identified as
+a critical yet absent component in the reviewed literature. The present
+work is positioned at this gap. It develops a prescriptive, multimodal
+digital-twin pipeline for shield-tunnel maintenance in which point-cloud
+and image evidence are interpreted through a structured,
+standards-referenced knowledge base, and it is organised around the
+three stages that this pipeline integrates: leakage prediction,
+deformation evaluation, and an ontology-based decision layer.
+
+\section{Related works}
+\label{related-works}
+
+\subsection{\textbf{Leakage Prediction}}%\label{leakage-prediction}
+
+Automated leakage assessments in shield tunnels have shifted decisively
+from image-based inspection toward direct interrogation of
+three-dimensional scan data, and the reviewed studies divide cleanly
+along that line. Early and still-common approaches segment leakage on
+two-dimensional imagery: fully convolutional networks applied to
+mobile-LiDAR intensity images ~\citep{Cheng2021}, attention-augmented
+U-Net variants ~\citep{Wang2024_2}, KAN-based lightweight segmentation
+networks ~\citep{He2025}, and instance-segmentation models built on
+Mask R-CNN and BlendMask backbones ~\citep{Geng2023, Wang2024}. The tunnel environment itself, like low and unstable
+illumination, is the biggest robustness in 2D image studies. This issue
+has motivated explainable infrared-RGB fusion networks that recover
+leakage targets invisible in ordinary photographs ~\citep{Yao2025} and
+dedicated detectors that synthesize low-light conditions during training
+~\citep{Liu2024}.
+
+A second, faster-growing branch operates directly on point clouds, which
+preserves the metric geometry needed to locate and size a leak on the
+lining surface. Within this branch the methods span classical and
+rule-based pipelines through transformer architectures. Geometric and
+rule-based extraction quantifies leakage location and area from raw
+laser-scan points ~\citep{Li2024}, while unsupervised schemes such
+as 3D Otsu thresholding combined with adaptive denoising and KNN
+clustering detect seepage without labelled data ~\citep{Wang2024}.
+Learning-based segmentation has progressed from classical machine
+learning on engineered descriptors ~\citep{Huang2026a} to deep
+architectures purpose-built for tunnel leakage, including the ensemble
+sparse-U-Net/transformer model BBE-Net ~\citep{Jiang2025b} and the
+geometry-enhanced point transformer GEPT-Net ~\citep{Jiang2025a}.
+Hybrid strategies bridge the two modalities by projecting points to
+images: panoramic-image Mask R-CNN with deformable attention ~\citep{Li2026} and YOLO-based segmentation of LiDAR-derived greyscale images
+~\citep{Liang2025} both exploit mature 2D detectors while retaining a
+path back to 3D coordinates. The summary of most of the studies on
+leakage predictions are presented in Table 1.
+
+The present work sits within the point-cloud branch. It performs
+multi-class segmentation on the native 3D scan rather than on projected
+imagery, and it treats detected leakage not as a terminal output but as
+graded evidence feeding a maintenance-decision stage, addressing the
+type-distinction and risk-quantification limitations that the reviewed
+detection-only methods leave open.
+
+%\emph{Table 1- A summary of previous studies}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.1728}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2036}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2200}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2357}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.1678}}@{}}
+\caption{- Structural-health degree and the corresponding maintenance
+measure ~\citep{MOHURD2018}}\label{Tab:01}
+\tabularnewline
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Study}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Input modality}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Method (model)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Method class}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Task}
+\end{minipage} \\
+\midrule\noalign{}
+\endfirsthead
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Study}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Input modality}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Method (model)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Method class}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Task}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+~\citep{Cheng2021} & LiDAR intensity images & FCN & CNN
+encoder--decoder & Segmentation \\
+~\citep{Geng2023} & Lining images & Improved BlendMask & Instance seg.
+(DL) & Segmentation \\
+~\citep{Li2024} & 3D laser-scan points & Geometric/rule-based
+software & Rule-based & Measurement/ quantification \\
+~\citep{Wang2024_2} & Images & CSG-UNet (attention) & CNN
+encoder--decoder & Segmentation \\
+~\citep{Liu2024} & Images & Tunnel Defects Detector (TDD) & Object
+detection (DL) & Detection \\
+~\citep{Wang2024} & 3D point clouds & 3D Otsu-KNN (unsupervised) &
+Classical ML & Detection \\
+~\citep{Wang2024_3} & Tunnel leakage images & Cascade-MRegNetX & Mask
+R-CNN & Segmentation \\
+~\citep{Wang2025} & Images & Semi-supervised teacher--student &
+Semi-supervised & Segmentation \\
+~\citep{Jiang2025b} & 3D point clouds & BBE-Net (sparse U-Net +
+transformer) & Deep learning (ensemble) & Segmentation \\
+~\citep{Jiang2025a} & Point clouds & GEPT-Net & Point transformer &
+Segmentation \\
+~\citep{Liang2025} & LiDAR → greyscale images & YOLOv11m-seg & YOLO &
+Segmentation \\
+~\citep{He2025} & Lining images & EMS-UKAN & KAN-based DL &
+Segmentation \\
+~\citep{Yao2025} & Infrared + RGB images & EG-UNet (explainable) & CNN
+encoder--decoder & Segmentation \\
+~\citep{Zhang2025} & 3D points + 2D projection & SAM + U-Net + DGCNN &
+Foundation model & Segmentation \\
+~\citep{Huang2026b} & MLS point clouds & Intensity-aware features +
+CatBoost & Classical ML & Segmentation \\
+~\citep{Li2026} & Laser scan → panoramic images & BMask R-CNN-DAT &
+Mask R-CNN & Segmentation \\
+\end{longtable}
+
+\subsection{\textbf{Deformation Evaluation}}\label{deformation-evaluation}
+
+Point cloud-based deformation evaluation of shield tunnels has evolved
+along a clear path, from purely geometric fitting toward learning-based
+segmentation that first isolates the structural elements and only then
+measures their distortion. The geometric branch remains the workhorse
+for cross-sectional metrics: The Iterative Closest Point algorithm was
+combined with ellipse fitting on mobile-laser-scanning data to detect
+cross-section displacement and shape change ~\citep{Camara2025}, and
+the deformed ring was reconstructed through polynomial axis extraction
+and binary-image processing to recover both section deformation and
+segment dislocation ~\citep{Zhang2024}. These methods are accurate and
+label-free, but the same fragility was repeatedly identified: the
+fitting assumptions degrade in noisy, occluded, or irregular scenes.
+
+The second branch, in which the lining is segmented into rings,
+segments, and joints by a network so that deformation is computed on
+clean, semantically isolated geometry. The trend is visible across a
+tightly connected group of recent studies: GL-Net, a global-feature
+segmentation network for shield-tunnel structural elements, was
+introduced ~\citep{Li2023}. Segmentation networks (TPSegNet, then the
+coordinate-only MTPointNet) were coupled with cascaded geometric schemes
+to detect longitudinal and convergence deformation from robot- and
+quadruped-acquired scans ~\citep{Feng2025,Feng2026}. Joint-level
+deformation is treated by the same logic: two CNNs were combined with
+RANSAC plane fitting to quantify longitudinal dislocation ~\citep{Yu2021}, 
+ring and longitudinal joints were identified through Hough
+transform and MSAC on a cylindrical projection ~\citep{Shen2025}, and
+points were converted to depth and grayscale images for multi-modal
+YOLOv8n quantification of joint opening ~\citep{Liu2025}. Across
+these, segmentation is consistently the enabling step rather than the
+end goal, since the measured indicator (convergence, dislocation,
+opening) is derived geometrically once the elements are separated.
+
+This study uses the segmentation-then-measure paradigm that the
+literature has converged on, but advances it on two fronts that the
+reviewed work leaves open. It carries the segmented elements through to
+a quantitative, standard-referenced deformation grade, addressing the
+measurement-and-assessment gap left unresolved by detection-oriented
+studies.
+
+\subsection{\textbf{Ontology-Based Decision}}\label{ontology-based-decision}
+
+Reaching the prescriptive level of a maintenance digital twin requires a
+formal knowledge layer through which condition observations can be
+linked to intervention decisions and traversed automatically, and
+ontologies provide that layer. Distributed ontology-based
+interoperability, in which purpose-built domain ontologies are linked
+through Web Ontology Language (OWL) alignment axioms, offers modular
+flexibility relative to fixed-schema approaches, and has been
+demonstrated across civil infrastructure, including ontological
+knowledge bases for bridge maintenance ~\citep{Ren2019}, building
+monitoring ~\citep{Mahdavi2017}, and integrated
+geospatial-model-knowledge representation for railway digital twins ~\citep{Li2022}. The reasoning capability such structures afford depends
+on the semantic richness of their model layer ~\citep{Tao2019b}, which
+is precisely what distinguishes a knowledge-bearing decision layer from
+a passive data repository.
+
+In the tunnel-maintenance domain specifically, semantic-web technologies
+have been applied to fuse condition information across data, object, and
+knowledge levels: the COBie standard was extended ontologically to
+organise tunnel digital-twin data, and a rule-based semantic-reasoning
+approach was introduced for equipment fault-cause analysis ~\citep{Yu2021}, and a knowledge-driven decision-support method for tunnel
+electromechanical-equipment maintenance was subsequently developed by
+the same group ~\citep{Yu2023}. An ontology- and graph-based modelling
+paradigm built from five elements, including: scenario, virtual model,
+physical entity, relation, and component, was proposed to support
+multidisciplinary operation across foundation excavation, subway
+tunnels, and pipe networks ~\citep{Li2024_2}, while lifecycle
+underground-utility information was modelled ontologically to support
+operation and maintenance ~\citep{Wang2021}. A complementary thread concerns
+populating such ontologies from the standards themselves: large language
+models perform well on structured information extraction from technical
+and regulatory documents, and schema-guided extraction, which constrains
+the model to a predefined output structure, achieves greater
+terminological consistency than free-form extraction and yields output
+directly compatible with ontology population ~\citep{Caufield2024, Dagdelen2024}.
+In a review of this trajectory, the maintenance-knowledge integration
+layer has been identified as the principal barrier to the
+predictive-to-prescriptive transition for underground infrastructure
+~\citep{Zhu2025}.
+
+This study develops an integration layer of shield-tunnel maintenance
+digital twins. A schema-guided large-language-model extraction pipeline
+is employed to build a domain knowledge base from the governing Chinese
+urban-rail maintenance standards, representing each rule as a
+failure-mode-and-effects-analysis reasoning chain that connects a
+degradation mechanism, through a measurable indicator and a graded
+threshold, to a prescribed intervention. The measured evidence of the
+current pipeline is then scored against this extracted rule base so that
+each ring-level maintenance decision is derived by traversing the
+knowledge chain and is traceable to the specific standard clause that
+governs it. In this way, the decision stage connects the multimodal
+condition assessment with the ontology-based reasoning presented here,
+closing the prescriptive loop from the sensed defect to the
+standard-referenced maintenance action.
+
+\section{Database}\label{database}
+
+\subsection{\textbf{Australian Reference Tunnel
+(ART)}}\label{australian-reference-tunnel-art}
+
+The Australian Reference Tunnel was a small fraction (13 rings) of the
+typical metro tunnels in Australia, specifically in Melbourne, Victoria,
+with a 6.3m clearance diameter and 6 segment-per-ring. The scanning
+process was done using Trimble X7 using 3 scans. Since the
+number of scans per ring was much higher than in the other studies, the
+given dataset is expected to improve the prediction stage by providing
+more accurate details for each component. Also, there has been zero
+leakage reported in this tunnel; thus, this tunnel can only support the
+study with the other three components: Joints, Pockets, and Segments.
+
+%\begin{figure}[htbp]
+%  \centering
+%  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture01.pdf}
+%  \caption{ Point cloud model of the TBM tunnel: (a) scan view, (b) global view, and (c) segmental view ~\citep{ZHUn.d.}}
+%  \label{fig:Fig1}
+%\end{figure}
+
+
+
+
+\subsection{\textbf{Nanjing metro Line 2
+(S3DIS)}}\label{nanjing-metro-line-2-s3dis}
+
+S3DIS\_Leakage dataset (S3Ld) is a publicly reported benchmark for
+water-leakage segmentation in operational shield tunnels ~\citep{Jiang2025a, Jiang2025b}. The data were acquired with a FARO Focus 330
+laser-scanning system along the operational shield tunnels between
+Jiqingmen Street and Xinglong Street stations on Line 2 of the Nanjing
+Metro, a section of approximately 1.6 km situated in the alluvial plain
+of the lower Yangtze River. From almost 90 tunnel sets in the
+given dataset, 9 of them have been annotated and used in this study to
+evaluate the size effect during prediction.
+
+
+%\begin{figure}[htbp]
+%  \centering
+%  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture02.pdf}
+%  \caption{ Route of Nanjing Metro Line 2 ~\citep{Gong2023}}
+%  \label{fig:Fig2}
+%\end{figure}
+
+\subsection{Data preprocessing}\label{data-preprocessing}
+
+Before the point clouds were partitioned for training, the raw scans
+were imported into CloudCompare for cleaning. Two operations were
+carried out. First, scanning noise and spurious returns, isolated points
+and low-density outliers produced by reflective lining surfaces,
+ancillary equipment, and acquisition artefacts, were removed, so that
+the subsequent geometric fitting and semantic segmentation operated on
+the lining surface rather than on measurement noise. Second, the
+residual points belonging to the tunnel invert, the track-bed region at
+the base of the bore, were segmented out, leaving the exposed
+segmental-ring surface over an open angular arc; this is the open-invert
+geometry that the per-ring deformation reconstruction subsequently
+accounts for. The cleaned point clouds, which carry the point-level
+class labels (leakage, joints, segments, and pockets) used downstream,
+were then exported for the data-separation stage.
+
+\section{Methodology}\label{methodology}
+
+The pipeline introduced is named TunSPEC  (Tunnel Standards-grounded Prescriptive 
+Evaluation of Conditions). The acronym tracks its structure: two parallel point-
+cloud branches carry out the Evaluation of Conditions, and a Standards-grounded l
+ayer renders a Prescriptive maintenance decision from them. 
+TunSPEC begins with data collection from two different sites. A
+Chinese metro tunnel and an Australian Reference Tunnel (Explained
+earlier in section \ref{database}), to evaluate that what fracture of the dataset can
+reach an acceptable performance through a foundation model, the given
+S3DIS dataset (from Nanjing Metro Line 2) was considered with three
+different levels: 25\% of the whole annotated dataset, 50\%, and 100\%.
+It is worth mentioning again that the whole annotated dataset was only
+10\% of the whole scanned dataset; thus, the full case scenario had only
+seen 10\% of previous studies.
+
+The Evaluation-of-Conditions stage holds the two parallel condition-assessment
+branches  (Figure \ref{fig:Fig3}). The leakage branch passes the point cloud through a
+self-supervised semantic-segmentation model, Sonata, assigning each
+point to one of the four classes. The deformation branch operates ring
+by ring: each ring is aligned to its principal axis by
+principal-component analysis (PCA), fitted with a robust ellipse or
+circle and a multi-zone polynomial, and reduced to a set of per-ring
+geometry indicators. The two branches share the same conditioned point
+cloud but produce evidence of two different kinds, one perceptual and
+one geometric, that the decision level later reads together.
+
+Standards-grounded, prescriptive stage comprises the AI-assistant decision layer of 
+Stage 5. In that step, the maintenance standards collected in Stage 1 are passed
+to a large language model (Claude Opus 4.8 ~\citep{Anthropic2026}) under a schema-
+guided extraction that returns a structured FMEA rule base. At inference, the
+decision layer reads the leakage and deformation measurements of Stage
+4, matches each measurement against the extracted standard thresholds,
+assigns a five-level health grade, and maps that grade to a maintenance
+decision with provenance retained to the source standard clause that
+governed it.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture033.pdf}
+  \caption{ The overall framework of this study}
+  \label{fig:Fig3}
+\end{figure}
+
+
+\subsection{\textbf{Sonata}}\label{sonata}
+
+The tunnel lining point clouds were segmented into four classes
+(Leakage, Joints, Segments, and Pockets) using Sonata, a self-supervised
+point-cloud representation model released by Meta AI ~\citep{Wu2025}.
+The overall network is shown in  (Figure \ref{fig:Fig4}) (a). It comprises three parts: a pre-trained hierarchical encoder, a non-parametric upcasting stage to
+restore the per-point resolution, and a lightweight segmentation head.
+The encoder is the serialisation-based point transformer on which Sonata
+is pre-trained ~\citep{Wu2024}. Sonata converts the unstructured
+points into ordered sequences along space-filling curves and processes
+them through a point-embedding stem followed by four hierarchical stages
+(Figure \ref{fig:Fig4} (a)). Each stage downsamples the cloud and doubles the feature
+width, taking the representation from full resolution to 1/2, 1/4, 1/8,
+and 1/16 with channel widths 2C, 4C, 8C, and 16C, the last forming the
+bottleneck. Each stage is built from serialised-attention blocks whose
+internal structure is detailed in Figure \ref{fig:Fig4} (b): an enhanced conditional
+positional encoding (xCPE), utilized as a depth-wise sparse convolution
+applied through a residual connection, precedes a pre-normalised
+serialised self-attention operating over shifted point patches, which is
+followed by a pre-normalised feed-forward MLP (linear→GELU→linear), each
+sub-layer wrapped in a residual connection ~\citep{Wu2024}.
+Downsampling between stages uses grid pooling (Figure \ref{fig:Fig4} (c)): points are
+assigned to voxels at the pooling grid size, their features are
+max-pooled within each occupied cell, and a linear projection doubles
+the channel dimension (C→2C) to yield the coarser point set ~\citep{Wu2024}. 
+Each point is presented to the encoder as a nine-dimensional
+feature of metric coordinates, a colour value, and a k-nearest-neighbour
+surface normal (k = 15) ~\citep{Wu2025}. Sonata is an encoder-only
+model, so dense per-point features are recovered by the training-free
+upcasting of Figure 1 (a, d) rather than by a learned decoder ~\citep{Wu2025}. The only learned parameters beyond the bottleneck are in the
+segmentation head (Figure \ref{fig:Fig4} (a)), a single linear layer followed by a
+SoftMax that maps each upcast point feature to the four class logits;
+the label of every original point is then recovered through the stored
+inverse indices, so that all metrics are computed at full scan
+resolution.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture04.pdf}
+  \caption{ the architecture of Sonata (a) overview, (b)
+serialised-attention block, (c) grid pooling, (d) upcasting}
+  \label{fig:Fig4}
+\end{figure}
+
+The network was trained under a single fixed recipe to enable controlled
+comparison. For the optimisation stage, AdamW with focal loss ($\gamma = 2$)
+was used. Geometric augmentation was applied only during training. Two
+transfer-learning regimes were compared: full fine-tuning, in which the
+entire pre-trained encoder is updated with a reduced backbone learning
+rate alongside the head, and linear probing, in which the encoder is
+frozen and only the linear head is trained --- the latter directly
+assessing the quality of the self-supervised representation. To
+characterise the dependence on annotation quantity, each regime was run
+at three labelled-data fractions (100\%, 50\%, and 25\% of the training
+source files, drawn by a fixed seed and stratified by class so that
+every configuration trains on a nested subset of the same data); the
+validation and test sets were never reduced. The model was trained on
+the labelled rings of seven tunnels and evaluated on the two fully
+held-out tunnels, with the held-out split enforced at the tunnel level
+to prevent leakage between training and test. The contribution of the
+supplementary Australian Reference Tunnel (ART) structural dataset was
+isolated by repeating every configuration with and without ART in the
+training pool. In contrast, the ART data were confined to training and
+validation and never entered the test set. Performance was reported per
+class and overall using accuracy, precision, recall, F1,
+Intersection-over-Union, Cohen's $\kappa$, and the Matthews correlation
+coefficient, all computed on the original full-resolution test points.
+
+\subsection{Multi-Zone Polynomial}\label{multi-zone-polynomial}
+
+The reconstruction follows the multi-zone polynomial scheme of ~\citep{Lin2025}, 
+but with some changes. Whereas Lin et al. normalize each
+ring by fitting an elliptic cylinder to recover the central axis (their
+Algorithm 1) and localize the longitudinal joints from the known, fixed
+segment-installation geometry by optimizing the key-segment reference
+angle (their Algorithm 2), the present method estimates the axis by
+principal-component analysis (PCA), determines the cross-sectional
+centre by a robust constrained-radius circle fit, and localizes joints
+empirically from the independently labelled joint point set using an
+anisotropy-weighted angular histogram, with an additional
+largest-empty-arc detection and angular re-referencing introduced to
+handle the removed invert
+
+The evaluation is per ring and for each ring, 5 stages have been
+applied, as follows: (i) estimation of the local tunnel axis and rigid
+alignment of the ring point cloud to a unified cross-sectional
+coordinate system (UCS); (ii) robust determination of the ring center by
+a constrained-radius circle fit; (iii) reduction to polar coordinates
+with detection and handling of the removed invert; (iv) localization of
+longitudinal joints and recovery of the individual segment instances;
+and (v) reconstruction of the radial profile of each segment by a
+multi-zone polynomial fit, from which the deformation indicators (radial
+deviation, joint dislocation, joint rotation, diametric convergence and
+opalization)
+
+\subsubsection{Tunnel-axis estimation and alignment to the
+UCS}\label{tunnel-axis-estimation-and-alignment-to-the-ucs}
+\addcontentsline{toc}{paragraph}{Tunnel-axis estimation and alignment to
+the UCS}
+
+the segment points of a ring are defined as
+\(\left\{ P_{i} \right\}_{i = 1}^{N}\)in which
+\(P_{i} = \left( x_{i},\ y_{i},\ z_{i} \right)^{T}\). The axis is
+defined as the direction of least spatial variance, rooted from the
+principal-component decomposition of a reference ring:
+
+
+\begin{equation}
+  \overline{P} = \frac{1}{N}\sum_{i=1}^{N}P_{i}
+  \label{eq:01}
+\end{equation}
+
+\begin{equation}
+  C = \frac{1}{N}\sum_{i=1}^{N}\left( P_{i} - \overline{P} \right)\left( P_{i} - \overline{P} \right)^{T}
+  \label{eq:02}
+\end{equation}
+
+With the eigenpairs \(Ce_{k} = \lambda_{k}e_{k}\)ordered
+\(\lambda_{1} \leq \lambda_{2} \leq \lambda_{3}\), The unit axis is the
+eigenvector of the smallest eigenvalue, sign-oriented to the positive
+global x direction:
+
+
+\begin{equation}
+  \widehat{a} = sgn\left( e_{1,x} \right)e_{1},
+  \label{eq:03}
+\end{equation}
+
+The ring is then rotated so that \(\widehat{a}\) coincides with the
+global axis \(\widehat{X} = (1,0,0)^{T}\). Using Rodrigues' construction
+with \(V = \widehat{a} \times \widehat{X}\) so:
+\(s = \left\| V \right\|\ \&\ c = \widehat{a}.\widehat{X}\),
+
+
+\begin{equation}
+  R = I + \lbrack V\rbrack_{\times} + \lbrack V\rbrack_{\times}^{2}\frac{1 - c}{s^{2}}
+  \label{eq:04}
+\end{equation}
+\begin{equation}
+  \lbrack V\rbrack_{\times} = \begin{bmatrix}
+0 & - v_{3} & v_{2} \\
+v_{3} & 0 & - v_{1} \\
+ - v_{2} & v_{1} & 0
+\end{bmatrix}\
+  \label{eq:05}
+\end{equation}
+
+
+
+Each point is mapped to the UCS by:
+
+\begin{equation}
+  {P'}_{i} = R\left( P_{i} - \overline{P} \right) = \left( {x'}_{i},\ {y'}_{i},\ {z'}_{i} \right)^{T}\
+  \label{eq:06}
+\end{equation}
+
+So, x' goes with the tunnel axis and (y', z') spans the cross-sectional
+plane.
+
+\subsubsection{Ring-centre determination by robust constrained-radius
+circle
+fitting}\label{ring-centre-determination-by-robust-constrained-radius-circle-fitting}
+\addcontentsline{toc}{paragraph}{Ring-centre determination by robust
+constrained-radius circle fitting}
+
+Since the invert section of the tunnel was flat and then removed from
+the point cloud, an unconstrained circle/ellipse fit to the partial arc
+is poorly defined. Thus, the centre of the cross-section
+\(\left( y_{c},\ z_{c} \right)\) is derived from a fixed design radius
+to reduce the robust (soft-\(L_{1}\)) loss over the geometric residuals
+
+
+\begin{equation}
+  [f_{i}\left( y_{c},\ z_{c} \right) = \sqrt{\left( \ {y'}_{i} - y_{c} \right)^{2} + \left( \ {z'}_{i} - z_{c} \right)^{2}} - R\
+  \label{eq:07}
+\end{equation}
+
+
+\begin{equation}
+  \left( {\widehat{y}}_{c},\ {\widehat{z}}_{c} \right) = \arg{\min{\sum_{i = 1}^{N}{\rho\left( f_{i}\left( y_{c},\ z_{c} \right) \right)}}}\
+  \label{eq:08}
+\end{equation}
+
+
+Where:
+
+
+\begin{equation}
+  \rho(f) = \gamma^{2}\left( \sqrt{{1 + \left( \frac{f}{\gamma} \right)}^{2}} - 1 \right)\
+  \label{eq:09}
+\end{equation}
+
+
+And \(\gamma\) is the soft-\(L_{1}\)scale (0.01m). Fixing R and using
+the robust loss makes the centre estimate insensitive both to the
+missing invert and to non-lining outliers.
+
+\subsubsection{Polar reduction and invert-gap handling}\label{polar-reduction-and-invert-gap-handling}
+\addcontentsline{toc}{paragraph}{Polar reduction and invert-gap
+handling}
+
+Each ring is expressed in polar form about its centre using \(\phi_{i}\)
+and \(\rho_{i}\):
+
+\begin{equation}
+  \phi_{i} = {atan}\left( {z'}_{i} - {\widehat{z}}_{c},\ {y'}_{i} - {\widehat{y}}_{c} \right),\ \rho\sqrt{\left( \ {y'}_{i} - {\widehat{y}}_{c} \right)^{2} + \left( \ {z'}_{i} - {\widehat{z}}_{c} \right)^{2}}\
+  \label{eq:10}
+\end{equation}
+
+The removed invert is assumed to be the largest empty angular gap, thus,
+binning \(\phi\) at \(5^{{^\circ}}\) and locating the longest run of
+empty bins gives the gap interval with centre (\(\phi_{g}^{c}\)).
+
+\begin{equation}
+  \phi_{i} \leftarrow \ \left( \left( \phi_{i} - \phi_{shift} \right) + \pi \right)mod\ 2\pi + \pi\
+  \label{eq:11}
+\end{equation}
+
+And \(\phi_{shift} = \phi_{g}^{c} + \pi\)
+
+So that the continuous lining arc occupies a contiguous interval
+\(\left\lbrack \phi_{\min},\phi_{\max} \right\rbrack\)in the shifted
+frame, with \(\phi = 0\) at the crown
+
+\subsubsection{Longitudinal-joint localisation and segment instancing} \label{longitudinal-joint-localisation-and-segment-instancing}
+\addcontentsline{toc}{paragraph}{Longitudinal-joint localisation and
+segment instancing}
+
+Longitudinal joints separate the segment instances within a ring. A
+longitudinal joint is narrow in \(\phi\) but extends across nearly the
+full ring width in \(\omega\), whereas circumferential features are the
+opposite; this anisotropy is used to localise joints from the
+\emph{Joints point set}. The joint points are transformed to the same
+UCS and shifted frame, binned in \(\phi\) (bin width
+\({1.5}^{{^\circ}}\)), and each bin \(k\) is scored by its count
+\(n_{k}\) weighted by its normalised axial extent,
+
+
+\begin{equation}
+  s_{k} = n_{k}.\frac{\omega_{k,Max} - \omega_{k,Min}}{w_{Total}}\
+  \label{eq:12}
+\end{equation}
+
+
+with axial-extent floor \(\tau_{\omega} = 0.70\).
+
+joint angles \(\left( \phi_{j} \right)\)are taken as the peaks of
+\(S_{k}\)that meet a relative height threshold
+(\(0.35\text{}S_{\max}\)), a relative prominence threshold
+(\(0.20\text{}S_{\max}\)) and a minimum separation (\(15^{\circ}\)).
+The number of retained peaks is capped at \(n_{seg} - 1\), where
+\(n_{seg}\) is the known maximum number of segments visible in the arc.
+
+The joint angles partition the arc into segment instances: a segment
+point with an angle \(\phi\) is assigned to the instance bounded by
+consecutive joint angles. Instances with fewer than \(5(d + 2)\) points
+or an angular span below \(15^{\circ}\)are rejected and recorded.
+
+\subsubsection{Multi-zone polynomial reconstruction of the radial profile}\label{multi-zone-polynomial-reconstruction-of-the-radial-profile}
+\addcontentsline{toc}{paragraph}{Multi-zone polynomial reconstruction of
+the radial profile}
+
+The radial profile \(\rho(\phi)\) of each segment instance is
+reconstructed by a global low-order polynomial augmented with local
+``sensitive-zone'' corrections at the joint ends.
+
+Over the interval arc, a polynomial of degree \(d\) (optimised as =4),
+
+\begin{equation}
+  \widehat{\rho}_{0}(\phi) = \sum_{m = 0}^{d}{a_{m}\phi^{m}}
+  \label{eq:13}
+\end{equation}
+
+is fitted by minimising a robust loss with \(\mathcal{l}_{2}\)(ridge)
+regularisation on the non-constant coefficients (with ridge weight
+\(\beta = 10^{- 3}\)):
+
+\begin{equation}
+  \widehat{a} = \arg{\min{\sum_{i = 0}^{a}\rho}}\left( \rho_{i} - {\widehat{\rho}}_{0}\left( \phi_{i} \right) \right) + \beta^{2}\sum_{m = 1}^{d}a_{m}^{2}\
+  \label{eq:14}
+\end{equation}
+
+
+\textbf{Sensitive-zone terms.} Within a band
+\(\Delta\phi_{s} = 3^{\circ}\)of each end that abuts a joint, a local
+correction polynomial of degree \(d_{s} = 3\)is added on top of the
+global fit. For the low (\(\phi_{\min}\)) and high (\(\phi_{\max}\))
+ends,
+
+\begin{equation}
+  \delta_{1}(\phi) = \sum_{l = 1}^{d_{s}}{a_{l}^{(2)}\left( \phi - \phi_{\min} \right)^{l}}\
+  for
+  \phi \leq \phi_{\min} + \mathrm{\Delta}\phi_{s}\
+  \label{eq:15}
+\end{equation}
+
+
+\begin{equation}
+  \delta_{2}(\phi) = \sum_{l = 1}^{d_{s}}{a_{l}^{(2)}\left( \phi - \phi_{\max} \right)^{l}}\ for
+  \phi \geq \phi_{\max} - \mathrm{\Delta}\phi_{s}\
+  \label{eq:16}
+\end{equation}
+
+
+
+each fitted (same robust + ridge objective) to the residual
+\(\rho_{i} - {\widehat{\rho}}_{0}(\phi_{i})\)inside its band.
+
+The per-segment fit quality is summarised by
+
+\begin{equation}
+  RMSE = \sqrt{\frac{1}{N_{s}}\sum_{i = 0}^{N_{s}}\left( \rho_{i} - \widehat{\rho}\left( \phi_{i} \right) \right)^{2}}\
+  \label{eq:17}
+\end{equation}
+
+
+\subsubsection{Deformation indicators}\label{deformation-indicators}
+\addcontentsline{toc}{paragraph}{Deformation indicators}
+
+\emph{Radial deviation:} The signed radial deviation of the lining from
+the design circle at angle \(\phi\)is:
+
+\begin{equation}
+  \mathrm{\Delta}r(\phi) = \widehat{\rho}(\phi) - R\
+  \label{eq:18}
+\end{equation}
+
+\emph{Joint dislocation (radial faulting):} At an internal joint between
+adjacent instances \(k\) and \(k + 1\), located at
+\(\phi_{j} = \frac{1}{2}(\phi_{\max}^{} + \phi_{\min}^{})\), The radial
+step (faulting) is the difference of the two reconstructed profiles
+evaluated at the joint:
+
+\begin{equation}
+  \mathrm{\Delta}_{disl} = {\widehat{\rho}}_{k}\left( \phi_{j} \right) - {\widehat{\rho}}_{k + 1}\left( \phi_{j} \right)\
+  \label{eq:19}
+\end{equation}
+
+\emph{Joint rotation:} The relative rotation of the two segment faces
+meeting at the joint is the change in the angle between the radial
+direction and the local surface tangent. With the one-sided slopes
+\(\rho_{k}^{'},\rho_{k + 1}^{'} = d\widehat{\rho}/d\phi\)evaluated at
+\(\phi_{j}\),
+
+\begin{equation}
+  \psi_{k} = {atan}{2\ {\widehat{\rho}}_{k}\left( \phi_{j} \right),\ {\rho'}_{k}}\
+  \label{eq:20}
+\end{equation}
+
+\emph{Ovalization:} To characterise the cross-sectional
+out-of-roundness, an ellipse is fitted to the reconstructed profile
+sampled densely as Cartesian points
+\(\left( u,v) = (\widehat{\rho}\cos\phi,\widehat{\rho}\sin\phi \right)\).
+The general conic
+
+\begin{equation}
+  Au^{2} + Buv + Cv^{2} + Du + Ev + F = 0,\ \ \ \ \ \ \ \ \ \ F = - 1,\
+  \label{eq:21}
+\end{equation}
+
+is fitted in the least-squares sense; the solution is an ellipse when
+the discriminant \(\Delta = B^{2} - 4AC < 0\). The semi-axes follow from
+the conic coefficients,
+
+\begin{equation}
+  a_{e},b_{e} = \sqrt{\frac{- 2\left( {AE}^{2} + {CD}^{2} - BDE + \mathrm{\Delta}F \right)}{\mathrm{\Delta}\left\lbrack (A + C) \mp \sqrt{(A - C)^{2} + B^{2}} \right\rbrack}},\ a_{e} > b_{e}\
+  \label{eq:22}
+\end{equation}
+
+with major-axis orientation
+\(\varphi_{e} = \frac{1}{2}atan2(B,\text{}A - C)\)(resolved to the
+major axis). The out-of-roundness (ovality) is
+
+\begin{equation}
+  O = a_{e} - b_{e},\ \ \ ellipticity\ \varepsilon = \frac{a_{e} - b_{e}}{R} \times 10^{3}\
+  \label{eq:23}
+\end{equation}
+
+Serviceability convergence index: The ellipse parameters yield three
+distinct, all-valid scalar descriptors of cross-sectional distortion,
+and it is essential to distinguish them because they differ by an order
+of magnitude and the maintenance standard grades only one of them.
+
+\begin{itemize}
+\item
+  Out-of-roundness / ellipticity \(\varepsilon = (a_{e} - b_{e})/R\)---
+  the total distortion of the section, equal to
+  \((D_{\max} - D_{\min})/D_{0}\)with \(D_{\max} = 2a_{e}\),
+  \(D_{\min} = 2b_{e}\).
+\item
+  Major-axis diametric change
+  \(\text{\,}C_{maj} = 2(a_{e} - R) = D_{\max} - D_{0}\)--- the outward
+  expansion of the longest diameter.
+\item
+  Clearance convergence \(C_{clr}\)- the reduction of the smallest
+  diameter relative to design, i.e. the loss of horizontal clearance.
+\end{itemize}
+
+Some Standards ~\citep{MOHURD2018} grades segment convergence as the
+\emph{clearance reduction}, not the total out-of-roundness. The
+serviceability convergence index used for grading is therefore defined
+from the minor diameter,
+
+\[D_{\min} = 2b_{e},\ \ C_{clearance} = \max{\left( \frac{D_{0} - D_{\min}}{D_{0}},0 \right) \times 10^{3}} = \max{\left( \frac{R - b_{e}}{R},0 \right) \times 10^{3}}\]
+
+clamped at zero so that an over-sized (net-outward) ring registers no
+clearance loss rather than a spurious negative value. When the
+ovalization is not aligned with the principal cross-sectional
+directions, the direction-resolved clearance is obtained from the
+ellipse radius function
+
+\begin{equation}
+  C_{h} = \frac{D_{0} - 2r\left( \theta_{h} \right)}{D_{0}} \times 10^{3}\
+  \label{eq:24}
+\end{equation}
+
+\begin{equation}
+  r(\theta) = \frac{a_{e} - b_{e}}{\sqrt{b_{e}^{2}\cos^{2}\left( \theta - \varphi_{e} \right) + b_{e}^{2}\sin^{2}\left( \theta - \varphi_{e} \right)}}\
+  \label{eq:25}
+\end{equation}
+
+evaluated at the horizontal direction \(\theta_{h}\); for sections whose
+minor axis is near-horizontal, \(C_{h} \approx C_{clr}\), which is used
+as the consistency check.
+
+\subsection{Ontology-Based Decision and Information
+Layer}\label{ontology-based-decision-and-information-layer}
+
+\subsubsection{The FMEA Reasoning Chain}\label{the-fmea-reasoning-chain}
+\addcontentsline{toc}{paragraph}{The FMEA Reasoning Chain}
+
+The reasoning stage of the decision layer includes a four-level chain to
+present a degradation mechanism using a measurable indication with a
+numeric threshold to come up with a reasonable maintenance action:
+
+\begin{equation}
+  FMEA:m_{mechanism} \rightarrow i_{indicator} \rightarrow t_{threshold} \rightarrow \nu_{intervention}\
+  \label{eq:26}
+\end{equation}
+
+with the four levels indexed by \(L = \left\{ 1,\ \ldots,4 \right\}\).
+The mechanism level (L1) names the degradation process; the indicator
+level (L2) is the measurable quantity that evidences it; the threshold
+level (L3) is the graded band set that maps the indicator to a
+structural-health degree; and the intervention level (L4) is the
+prescribed maintenance action for that degree.
+
+For a segmental shield metro tunnel, the mechanisms graded in this study
+are clearance convergence and joint dislocation (Section \ref{multi-zone-polynomial}) and water
+leakage (Section \ref{sonata}). The threshold level is a set of governing
+standard tables, causing to produce a health-degree band. Each band is
+tagged with its health degree, its intervention tier, and its
+originating clause. The authoritative grading scale throughout is the
+five-level structural-health degree of the Chinese urban-rail
+maintenance standard CJJ/T 289-2018 (Table \ref{tab:02}) ~\citep{MOHURD2018}.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.0896}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.7082}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2123}}@{}}
+\caption{Structural-health degree and the corresponding maintenance measure ~\citep{MOHURD2018}}
+\label{tab:02}\\ 
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Health degree}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Maintenance measure (standard)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Intervention tier (this study)}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Level 1 & Normal upkeep & Acceptable \\
+Level 2 & Normal upkeep; attended at the next inspection & Monitor \\
+Level 3 & Special monitoring as needed; repair decided from monitoring &
+Investigation \\
+Level 4 & Restrict use as needed; repair as soon as possible; special
+monitoring & Action required \\
+Level 5 & Immediately restrict use; repair or replace; special
+monitoring & Emergency \\
+\end{longtable}
+
+\subsubsection{Source Standards}\label{source-standards}
+\addcontentsline{toc}{paragraph}{Source Standards}
+
+The rule base is populated from the prescriptive maintenance and
+acceptance standards governing Chinese urban-rail shield tunnels. CJJ/T
+289-2018 supplies the structural-health-degree scale (Table \ref{tab:01}1), the
+segment-convergence grading bands (Table \ref{tab:03}), and the joint-faulting
+grading bands (Table \ref{tab:04}). GB 50208 supplies the waterproofing-grade
+criteria used for the leakage assessment (Table \ref{tab:05}).
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.3197}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1360}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1360}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1360}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1360}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1361}}@{}}
+\caption{Segment-convergence grading bands ~\citep{MOHURD2018}}
+\label{tab:03}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Indicator}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 1}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 2}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 3}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 4}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 5}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Straight-joint convergence & $0 \le c \le 5$ & $5 < c \le 8$ & $8 < c \le 12$ & $12 < c \le 16$ & $c > 16$ \\
+Staggered-joint convergence & $0 \le c \le 4$ & $4 < c \le 6$ & $6 < c \le 9$ & $9 < c \le 12$ & $c > 12$ \\
+\end{longtable}
+
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.3199}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1360}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1360}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1360}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1370}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1361}}@{}}
+\caption{Joint-faulting grading bands ~\citep{MOHURD2018}}
+\label{tab:04}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Indicator}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 1}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 2}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 3}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 4}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Level 5}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Joint faulting $f$ (mm) & $0 \le f < 4$ & $4 \le f < 8$ & $8 \le f < 10$ & $10 \le f < 12$ & $f \ge 12$ \\
+\end{longtable}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.2008}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.8002}}@{}}
+\caption{Waterproofing-grade criteria used for the leakage
+assessment ~\citep{AQSIQ2011}}
+\label{tab:05}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Waterproof grade}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Leakage Descriptor}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Grade 1 & No seepage; no wet stains on the structure surface. \\
+Grade 2 & No leakage; minor wet stains permitted -- wet-stain area $\le$
+2/1000 of the waterproof area, $\le$ 3 stains per 100 m\textsuperscript{2}, single stain $\le$ 0.2
+m\textsuperscript{2}; mean seepage $\le$ 0.05 L/(m\textsuperscript{2}$\cdot$d). \\
+Grade 3 & A few leakage points; no linear flow or mud/sand leakage -- $\le$ 7
+leakage or wet-stain points per 100 m\textsuperscript{2}, single point $\le$ 2.5 L/d, single
+wet stain $\le$ 0.3 m\textsuperscript{2}. \\
+Grade 4 & Leakage points present; no linear flow or mud/sand leakage --
+mean leakage $\le$ 2 L/(m\textsuperscript{2}$\cdot$d), $\le$ 4 L/(m\textsuperscript{2}$\cdot$d) per 100 m\textsuperscript{2}. \\
+\end{longtable}
+
+\subsubsection{LLM-assisted, schema-guided extraction}\label{llm-assisted-schema-guided-extraction}
+\addcontentsline{toc}{paragraph}{LLM-assisted, schema-guided extraction}
+
+The rule base is constructed by schema-guided extraction. The large
+language model used for this purpose is constrained to populate the
+predefined four-field structure of Equation \ref{eq:26} rather than to generate
+free-form text. Schema-guided prompting enforces terminological
+consistency across standards and yields output that is directly
+compatible with rule-based population. Each standard section is
+processed in a single long-context pass, so that conditional logic and
+cross-references spanning a table and its surrounding clauses are
+preserved.
+
+A frontier long-context model was chosen as the primary extraction
+engine due to its reasoning ability over dense technical prose and its
+robustness to schema-constrained output generation. Decoding is
+deterministic (temperature = 0). Categorical-field controlled
+vocabularies fix the mechanism (L1) labels so that chains extracted from
+different standards are mutually comparable and are refined iteratively
+as new terms are encountered. The field definitions and controlled
+vocabularies adopted for the metro-shield instantiation are summarised
+in Table \ref{tab:06}.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.0897}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.1323}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.4960}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 6\tabcolsep) * \real{0.2820}}@{}}
+\caption{Four-level chain: field definitions and controlled
+vocabularies for the metro-shield instantiation.}
+\label{tab:06}\\ 
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{FMEA Level}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Field}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Controlled vocabulary/ form}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Example (metro shield)}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+L1 & Mechanism & Convergence deformation, Joint dislocation, Water
+leakage, Joint opening, Cracking, Spalling & Clearance convergence of
+the lining ring \\
+L2 & Indicator & Convergence, dislocation/faulting (mm), wet area (m²)
+and leakage class, opening (mm) & Horizontal clearance convergence, of
+diameter \\
+L3 & Threshold & Graded band set on the five-level CJJ/T 289 health
+degree, with source clause & 0-4 / 4-6 / 6-9 / 9-12 / \textgreater12 \\
+L4 & Intervention & Routine upkeep, Monitoring, Investigation, Repair,
+Reinforcement, Replacement & Reinforcement / clearance-restoration
+grouting \\
+\end{longtable}
+
+\subsubsection{Population of the present tunnel and modality
+mapping}\label{population-of-the-present-tunnel-and-modality-mapping}
+\addcontentsline{toc}{paragraph}{Population of the present tunnel and
+modality mapping}
+
+For the present tunnel, the indicator level (L2) of each chain is
+generated with instance-level condition data from two evidence channels.
+The geometric channel supplies the structural indicators from the
+deformation pipeline: the horizontal clearance convergence and the
+per-ring maximum joint dislocation enter the convergence and dislocation
+chains, respectively. The image channel supplies the leakage indicator:
+a vision--language model reads the segmented leakage map and the
+radial-deviation heat-map of each axial window, together with the
+corresponding per-ring numeric table, and returns a structured record
+giving the leakage class (none, wet-stain, seepage, dripping,
+linear-leakage, gushing), the total wet area, and the located leakage
+patches.
+
+\subsubsection{Rule-driven grading and
+intervention}\label{rule-driven-grading-and-intervention}
+\addcontentsline{toc}{paragraph}{Rule-driven grading and intervention}
+
+The decision layer uses the extracted rule base as the grader and
+iterates the four-level chain for each ring. For a measured mechanism
+(L1), the governing chain is chosen by the mechanism label, the
+indicator unit, and the joint type of the ring. The measured indicator
+(L2) is compared with the graded threshold bands (L3) of that chain, and
+the health degree is the band in which the indicator lies; an indicator
+value outside the outermost band is assigned to the nearest extreme
+band. The structural condition of the ring is the most severe category
+within the graded mechanisms. The leakage condition is derived by
+comparing the vision-derived leakage class and, where applicable, the
+wet area against the waterproofing-grade criteria of Table 4. The
+overall condition of a tunnel section is the worst of its worst
+ring-level structural degree, and its leakage degree, and its prescribed
+maintenance action (L4) is the intervention of the chain that determines
+the governing degree, reported with its tier (Table \ref{Tab:01}) and source
+clause.
+
+\subsubsection{Scope of the decision
+layer}\label{scope-of-the-decision-layer}
+\addcontentsline{toc}{paragraph}{Scope of the decision layer}
+
+The decision layer scores for the four levels of Eq. (\ref{eq:26}). The structural
+grade (convergence and dislocation) is obtained from the numeric
+standard bands of Tables 2 and 3. It is offset-immune due to the
+clearance-convergence formulation. Leakage is classified qualitatively
+by visual inspection and related to the descriptor criteria in Table \ref{tab:04}.
+The area criteria are calibrated from the acceptance standard and
+engineering practice, so leakage-governed results are reported as
+subject to field verification.
+
+\section{Results and discussion}\label{results-and-discussion}
+
+\subsection{Leakage Prediction}\label{leakage-prediction-1}
+
+The leakage-segmentation experiments were designed to follow a single
+question across a grid of conditions: how much of the model's accuracy
+survives while reducing the amount of labelled data for the training
+section. Three labelled-data budgets (25\%, 50\%, and 100\% of the
+training files) were crossed with two transfer regimes, full fine-tuning
+of the encoder and linear probing of a frozen encoder, and the whole
+grid was run twice: once on the S3DIS leakage data alone and once with
+the Australian Reference Tunnel (ART) added to the training pool.
+
+The full-fine-tuning results are presented inTable \ref{tab:07}. It can be
+seen that the model trained on S3DIS alone rises from an accuracy of
+0.93 and a macro-F1 of 0.93 at the quarter-data budget to 0.97 on both
+measures at full supervision, with Cohen's $\kappa$ and MCC moving from
+0.89--0.90 to 0.95. The linear-probing columns of the same dataset begin
+much lower and climb more steeply, from an accuracy of 0.69 and a $\kappa$ of
+0.58 at 25\% to 0.93 and 0.89 at full data, so that the separation
+between the two regimes is widest at the smallest budget and narrows as
+labels are added. Adding ART changes the picture chiefly at the weak end
+of the grid: the linear-probe configuration at 25\% rises from an
+accuracy of 0.69 to 0.83 and its $\kappa$ from 0.58 to 0.75, whereas the
+full-fine-tuning configurations, already high on S3DIS alone, shift only
+within a few hundredths and at full data sit marginally below their
+S3DIS-only counterparts at 0.96 against 0.97 accuracy.
+
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.2431}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.1261}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.1261}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.1261}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.1261}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.1261}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.1261}}@{}}
+\caption{performance evaluation across different configurations.}
+\label{tab:07}\\ 
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\end{minipage} &
+\multicolumn{6}{>{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.7569} + 10\tabcolsep}@{}}{%
+\begin{minipage}[b]{\linewidth}\raggedright
+\emph{\textbf{S3DIS+ ART}}
+\end{minipage}} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+&
+\multicolumn{3}{>{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.3784} + 4\tabcolsep}}{%
+\textbf{Full}} &
+\multicolumn{3}{>{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.3784} + 4\tabcolsep}@{}}{%
+\textbf{Linear Probe}} \\
+\textbf{Database size (\%):} & 25 & 50 & 100 & 25 & 50 & 100 \\
+\textbf{Accuracy} & 0.95 & 0.95 & 0.96 & 0.83 & 0.90 & 0.90 \\
+\textbf{F1 (macro)} & 0.95 & 0.95 & 0.95 & 0.84 & 0.90 & 0.91 \\
+\textbf{F1 (Weighted)} & 0.95 & 0.96 & 0.96 & 0.84 & 0.90 & 0.91 \\
+\textbf{Cohen's Kappa} & 0.92 & 0.93 & 0.93 & 0.75 & 0.84 & 0.86 \\
+\textbf{MCC} & 0.93 & 0.93 & 0.93 & 0.78 & 0.86 & 0.87 \\
+&
+\multicolumn{6}{>{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.7569} + 10\tabcolsep}@{}}{%
+\emph{\textbf{S3DIS}}} \\
+&
+\multicolumn{3}{>{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.3784} + 4\tabcolsep}}{%
+\textbf{Full}} &
+\multicolumn{3}{>{\raggedright\arraybackslash}p{(\columnwidth - 12\tabcolsep) * \real{0.3784} + 4\tabcolsep}@{}}{%
+\textbf{Linear Probe}} \\
+\textbf{Database size (\%):} & 25 & 50 & 100 & 25 & 50 & 100 \\
+\textbf{Accuracy} & 0.93 & 0.96 & 0.97 & 0.69 & 0.82 & 0.93 \\
+\textbf{F1 (macro)} & 0.93 & 0.96 & 0.97 & 0.74 & 0.83 & 0.93 \\
+\textbf{F1 (Weighted)} & 0.93 & 0.96 & 0.97 & 0.69 & 0.82 & 0.93 \\
+\textbf{Cohen's Kappa} & 0.89 & 0.93 & 0.95 & 0.58 & 0.73 & 0.89 \\
+\textbf{MCC} & 0.90 & 0.94 & 0.95 & 0.65 & 0.77 & 0.90 \\
+\end{longtable}
+
+The predicted segmentations besides the ground-truth labelling for all
+twelve configurations are presented in Figure \ref{fig:Fig5}. The qualitative trend
+follows the tabulated one: the full-fine-tuning panels reproduce the
+position and extent of the blue leakage patches closely at every budget,
+and the differences among 25\%, 50\%, and 100\% are confined to the
+sharpness of patch boundaries and a few small, isolated regions. The
+linear-probe panels show the data-budget effect more plainly, with the
+25\% maps undermarking the smaller leakage areas and recovering
+progressively more of them at 50\% and 100\%.
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture052.pdf}
+  \caption{ a comparison between the ground truth and different
+configurations}
+  \label{fig:Fig5}
+\end{figure}
+The given configurations are then compared against nine point-cloud
+baselines reported by  ~\citep{Jiang2025a,Jiang2025b} on the same leakage
+benchmark in Table \ref{tab:08}. The highest leakage IoU in the table (94.34)
+belongs to the full-fine-tuning configuration trained on S3DIS at full
+supervision; the next values beneath it are 92.37 and 92.17 from the
+50\%-S3DIS and full-data S3DIS+ART full-fine-tuning runs, and the
+strongest external baseline, the BBE-Net ensemble, records 88.95. On
+mean accuracy, the same full-data S3DIS configuration reaches 98.60,
+above the 96.01 of BBE-Net, while on mean IoU, the 94.26 of BBE-Net sits
+just above the 93.90 of that configuration.
+
+The internal ordering within the present study repeats the regime and
+budget pattern of Table \ref{tab:07} and expresses the dataset contrast in IoU
+terms. Full fine-tuning exceeds linear probing at every matched setting.
+The ART contribution again concentrates at the weak end of the grid: the
+25\% linear-probe leakage IoU rises from 45.41 on S3DIS to 70.02 with
+ART, whereas at full-data full fine-tuning the S3DIS-only value of 94.34
+stands above the 92.17 obtained with ART.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.2085}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.2361}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.3057}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1015}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.0741}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.0741}}@{}}
+\caption{Results comparison with the previous studies.}
+\label{tab:08}\\ 
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Source}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{method}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Backbone family}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{L-IoU}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{mIoU}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{mAcc}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+\multirow{12}{=}{This study} & \multirow{12}{=}{PTv3 backbone} & Sonata
+(Full, S3DIS+ART, 25\%) & 88.52 & 90.70 & 97.80 \\
+& & Sonata (Full, S3DIS+ART, 50\%) & 91.31 & 88.10 & 93.50 \\
+& & Sonata (Full, S3DIS+ART, 100\%) & 92.17 & 91.50 & 98.00 \\
+& & Sonata (Lin., S3DIS+ART, 25\%) & 70.02 & 74.20 & 92.10 \\
+& & Sonata (Lin., S3DIS+ART, 50\%) & 81.79 & 82.50 & 95.30 \\
+& & Sonata (Lin., S3DIS+ART, 100\%) & 83.19 & 83.80 & 95.70 \\
+& & Sonata (Full, S3DIS, 25\%) & 87.59 & 87.40 & 96.90 \\
+& & Sonata (Full, S3DIS, 50\%) & 92.37 & 91.70 & 98.10 \\
+& & Sonata (Full, S3DIS, 100\%) & 94.34 & 93.90 & 98.60 \\
+& & Sonata (Lin., S3DIS, 25\%) & 45.41 & 60.90 & 85.60 \\
+& & Sonata (Lin., S3DIS, 50\%) & 67.65 & 73.10 & 91.40 \\
+& & Sonata (Lin., S3DIS, 100\%) & 88.01 & 87.30 & 96.80 \\
+\multirow{2}{=}{(Jiang et al., 2025a)} & GEPT-Net & Point Transformer v3
++ FPFH & 85.31 & 92.38 & 94.50 \\
+& PTv2 & Point Transformer v2 & 75.17 & 87.17 & 90.24 \\
+\multirow{7}{=}{(Jiang et al., 2025b)} & BBE-Net & Ensemble (SpU + ST +
+PT) & 88.95 & 94.26 & 96.01 \\
+& RandLA-Net & RandLA & 74.03 & 86.74 & 92.38 \\
+& Minkowski U-Net & Sparse conv & 71.57 & 85.35 & 91.63 \\
+& Sparse U-Net & Sparse conv & 71.15 & 85.21 & 92.74 \\
+& Stratified Transformer & Transformer & 67.73 & 83.44 & 88.07 \\
+& Point Transformer v1 & Point Transformer & 66.61 & 82.74 & 88.47 \\
+& SPVCNN & Sparse point-voxel & 55.54 & 76.89 & 82.64 \\
+\end{longtable}
+
+Figure \ref{fig:Fig6} shows the confusion matrix of the strongest configuration, full
+fine-tuning on S3DIS at full supervision, in both count and
+row-normalised form. The Joints, Segments, and Pockets classes are
+recovered without error at the normalised level, each reading 1.00 on
+the diagonal. The leakage row reads 0.94 on the diagonal, with the
+remaining true-leakage points distributed as 0.05 into Joints and 0.01
+into Pockets and a negligible fraction into Segments; in counts,
+2,225,756 leakage points are labelled correctly while 117,056 are
+assigned to Joints and 16,307 to Pockets.
+
+Moreover, Figure \ref{fig:Fig7} resolves the same configuration into per-class
+precision, recall, F1, and IoU. The leakage class records a precision of
+1.000 with a recall of 0.943, so that no point of another class was
+assigned to leakage while 5.7\% of true leakage points received other
+labels; the Joints class shows the complementary pattern, a recall of
+1.000 against a precision of 0.840, in line with the leakage points that
+the confusion matrix placed in Joints. The Segments class reads 1.000 on
+all four measures, and the Pockets class records a precision of 0.974, a
+recall of 1.000, an F1 of 0.987, and an IoU of 0.974; expressed as IoU,
+the four classes stand at 0.945 for leakage, 0.840 for joints, 1.000 for
+segments, and 0.974 for pockets.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture06.pdf}
+  \caption{ Confusion matrix for \emph{Sonata (Full, S3DIS, 100\%)}}
+  \label{fig:Fig6}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture07.pdf}
+  \caption{ Per-class metrics for \emph{Sonata (Full, S3DIS, 100\%)}}
+  \label{fig:Fig7}
+\end{figure}
+
+
+\subsection{Deformation}\label{deformation}
+Once the lining had been separated into its structural elements, the
+geometry of each ring was reconstructed and reduced to a small set of
+deformation indicators, so that the qualitative segmentation of the
+previous stage could be read as measured shape. The reconstruction was
+applied ring by ring to the two held-out tunnels, the thirteen rings of
+Tunnel 8 and the twelve rings of Tunnel 9, and every ring was
+characterised by its clearance convergence, its ovalization and
+ellipticity, the largest joint dislocation and rotation found along it,
+and the residual of the ellipse fit. Table \ref{tab:09} records these quantities
+for the 25 rings.
+
+Across both tunnels the clearance convergence remains within a narrow
+band, running from 1.59 to 4.22 ‰D in Tunnel 8 and from 2.71 to 4.93 ‰D
+in Tunnel 9, while the ovalization spans roughly 40 to 52 mm and the
+ellipticity 14.6 to 18.7 ‰. The maximum joint dislocation per ring
+reaches 5.4 mm in Tunnel 8 and 5.2 mm in Tunnel 9, and the maximum joint
+rotation is more variable, mostly between 2° and 9° but rising to 12.49°
+at ring 12 of Tunnel 8 and 12.07° at ring 8 of Tunnel 9. The ellipse-fit
+RMSE stays between 4.48 and 7.04 mm across all rings, with the larger
+residuals coinciding with the rings that carry the highest ovalization.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.0919}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.0654}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1404}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1404}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1404}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1404}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1404}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1404}}@{}}
+\caption{Per-ring deformation indicators for the two held-out test
+tunnels.}
+\label{tab:09}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Tunnel}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ring}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Clearance conv. (\textperthousand D)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ovalization (mm)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ellipticity (\textperthousand)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Max joint dislocation (mm)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Max joint rotation ($^{\circ}$)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Fit RMSE (mm)}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+8 & 1 & 2.24 & 41.5 & 15.1 & 3 & 5.06 & 4.48 \\
+8 & 2 & 2.4 & 44.3 & 16.1 & 5.4 & 5.45 & 4.54 \\
+8 & 3 & 2.17 & 43.5 & 15.8 & 1.8 & 5.31 & 5.01 \\
+8 & 4 & 1.59 & 41.7 & 15.2 & 2.2 & 3.48 & 5.23 \\
+8 & 5 & 3.38 & 49 & 17.8 & 2.7 & 2.48 & 4.92 \\
+8 & 6 & 2.94 & 47 & 17.1 & 1.6 & 8.21 & 4.53 \\
+8 & 7 & 2.48 & 44 & 16 & 2.6 & 3.04 & 5.53 \\
+8 & 8 & 2.29 & 45 & 16.4 & 4.7 & 5.46 & 5.67 \\
+8 & 9 & 4.22 & 50.2 & 18.2 & 2.6 & 2.15 & 6.04 \\
+8 & 10 & 2.42 & 43.9 & 15.9 & 3.1 & 3.55 & 5.08 \\
+8 & 11 & 3.91 & 48.5 & 17.6 & 3.3 & 1.99 & 5.7 \\
+8 & 12 & 3.8 & 49.4 & 18 & 4.3 & 12.49 & 7.04 \\
+8 & 13 & 3.36 & 47.1 & 17.1 & 3.9 & 4.17 & 6.54 \\
+9 & 1 & 4.6 & 50.7 & 18.5 & 2.5 & 5.59 & 5.37 \\
+9 & 2 & 3.73 & 46.6 & 16.9 & 3.9 & 4.17 & 5.8 \\
+9 & 3 & 4.93 & 51.5 & 18.7 & 2.5 & 4.56 & 5.25 \\
+9 & 4 & 4.07 & 48.8 & 17.7 & 3.4 & 8.34 & 5.72 \\
+9 & 5 & 3.57 & 46.2 & 16.8 & 5.2 & 5.88 & 5.96 \\
+9 & 6 & 4.5 & 49.9 & 18.1 & 3.9 & 9.57 & 6.71 \\
+9 & 7 & 3.88 & 46.1 & 16.8 & 1 & 3.91 & 6.05 \\
+9 & 8 & 3.2 & 44.3 & 16.1 & 3.5 & 12.07 & 6.86 \\
+9 & 9 & 2.71 & 40.1 & 14.6 & 4 & 2.55 & 5.86 \\
+9 & 10 & 3.66 & 43.2 & 15.7 & 2.5 & 4.36 & 5.09 \\
+9 & 11 & 3.6 & 42.9 & 15.6 & 4.2 & 7.96 & 5.01 \\
+9 & 12 & 4.34 & 45.6 & 16.6 & 3 & 7.67 & 5.55 \\
+\end{longtable}
+
+Because the ovalization is the indicator most sensitive to the fitting
+procedure, it was computed by two independent routes and compared. Table
+\ref{tab:10} lists, for every ring, the ovalization obtained from the polynomial
+reconstruction and from a raw conic fit, together with their absolute
+difference. The two estimates track each other closely: the mean
+absolute difference is 1.15 mm for Tunnel 8 and 1.62 mm for Tunnel 9,
+with an overall mean of 1.37 mm, and the largest single discrepancy is
+3.6 mm, at ring 9 of Tunnel 8, where the polynomial value of 50.18 mm
+meets a raw value of 46.58 mm.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.0892}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.0701}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.3147}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.3018}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2242}}@{}}
+\caption{Ring-by-ring comparison of ovalization computed from the
+polynomial reconstruction and from the raw conic fit, with the absolute
+difference per ring and the per-tunnel and overall mean and maximum
+differences.}
+\label{tab:10}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Tunnel}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ring}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ovalization, polynomial (mm)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ovalization, raw conic (mm)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Abs. difference (mm)}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+8 & 1 & 41.48 & 40.93 & 0.55 \\
+8 & 2 & 44.26 & 43.89 & 0.36 \\
+8 & 3 & 43.45 & 43.97 & 0.52 \\
+8 & 4 & 41.71 & 42.04 & 0.33 \\
+8 & 5 & 49.03 & 48.78 & 0.26 \\
+8 & 6 & 47.01 & 45.81 & 1.19 \\
+8 & 7 & 43.99 & 42.17 & 1.82 \\
+8 & 8 & 45 & 45.67 & 0.67 \\
+8 & 9 & 50.18 & 46.58 & 3.6 \\
+8 & 10 & 43.85 & 44.36 & 0.51 \\
+8 & 11 & 48.51 & 46.29 & 2.22 \\
+8 & 12 & 49.41 & 46.87 & 2.54 \\
+8 & 13 & 47.12 & 47.45 & 0.34 \\
+\textbf{T8} & \emph{mean} & & & 1.15 \\
+\textbf{T8} & \emph{max} & ~ & ~ & 3.6 \\
+9 & 1 & 50.75 & 48.37 & 2.38 \\
+9 & 2 & 46.6 & 45.99 & 0.61 \\
+9 & 3 & 51.48 & 48.81 & 2.66 \\
+9 & 4 & 48.78 & 46.09 & 2.7 \\
+9 & 5 & 46.18 & 46.41 & 0.23 \\
+9 & 6 & 49.86 & 47.38 & 2.48 \\
+9 & 7 & 46.11 & 45.88 & 0.23 \\
+9 & 8 & 44.29 & 42.62 & 1.67 \\
+9 & 9 & 40.07 & 40.89 & 0.82 \\
+9 & 10 & 43.17 & 40.49 & 2.68 \\
+9 & 11 & 42.85 & 42.6 & 0.25 \\
+9 & 12 & 45.65 & 42.95 & 2.7 \\
+\textbf{T9} & \emph{mean} & & & 1.62 \\
+\textbf{T9} & \emph{max} & & & 2.7 \\
+\textbf{All} & \emph{mean} & & & 1.37 \\
+\textbf{All} & \emph{max} & ~ & ~ & 3.6 \\
+\end{longtable}
+
+Figure \ref{fig:Fig8} plots the same comparison, with the polynomial ovalization on
+one axis and the raw-conic ovalization on the other. The points for both
+tunnels fall along the diagonal, with the Tunnel 8 cloud (panel a, mean
+absolute difference 1.1 mm) sitting marginally tighter than the Tunnel 9
+cloud (panel b, 1.6 mm), and the few points that depart from the line
+are the high-ovalization rings already identified in Table 10.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture08.pdf}
+  \caption{ Agreement between the polynomial (pipeline) and raw-conic
+ovalization estimates for (a) Tunnel 8 and (b) Tunnel 9}
+  \label{fig:Fig8}
+\end{figure}
+
+The joint behaviour of each ring is detailed in Table \ref{tab:11}, which
+separates the mean and maximum absolute dislocation from the mean and
+maximum absolute rotation. The mean absolute dislocation per ring lies
+between 0.38 and 2.86 mm and the per-ring maximum between 0.98 and 5.37
+mm. It can be seen that the dislocations are small and uniform along
+both tunnels. The rotation values are less uniform: mean absolute
+rotation per ring ranges from about 1.1° to 6.3°, and the per-ring
+maximum reaches 12.49° at ring 12 of Tunnel 8 and 12.07° at ring 8 of
+Tunnel \ref{tab:09}, the same two rings that carry the largest rotations in Table
+9.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1097}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1098}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1982}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1982}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1968}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 10\tabcolsep) * \real{0.1873}}@{}}
+\caption{Per-ring joint behavior for the two test tunnels: mean
+and maximum absolute joint dislocation (mm) and mean and maximum
+absolute joint rotation (°).}
+\label{tab:11}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Tunnel}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ring}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Mean abs. dislocation (mm)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Max abs. dislocation (mm)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Mean abs. rotation (°)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Max abs. rotation (°)}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+8 & 1 & 1.25 & 3.01 & 3.26 & 5.06 \\
+8 & 2 & 2.49 & 5.37 & 2.81 & 5.45 \\
+8 & 3 & 1.27 & 1.81 & 3.31 & 5.31 \\
+8 & 4 & 1.2 & 2.22 & 1.43 & 3.48 \\
+8 & 5 & 2.12 & 2.68 & 1.21 & 2.48 \\
+8 & 6 & 0.67 & 1.59 & 4.14 & 8.21 \\
+8 & 7 & 1.43 & 2.64 & 2.31 & 3.04 \\
+8 & 8 & 2.36 & 4.7 & 2.18 & 5.46 \\
+8 & 9 & 1.7 & 2.62 & 1.43 & 2.15 \\
+8 & 10 & 1.92 & 3.14 & 2.61 & 3.55 \\
+8 & 11 & 1.53 & 3.26 & 1.08 & 1.99 \\
+8 & 12 & 2.68 & 4.28 & 6.27 & 12.49 \\
+8 & 13 & 2.63 & 3.85 & 1.99 & 4.17 \\
+9 & 1 & 1.73 & 2.47 & 4.24 & 5.59 \\
+9 & 2 & 1.92 & 3.94 & 2.39 & 4.17 \\
+9 & 3 & 1.42 & 2.47 & 3.09 & 4.56 \\
+9 & 4 & 2.18 & 3.44 & 4.17 & 8.34 \\
+9 & 5 & 2.41 & 5.15 & 3.35 & 5.88 \\
+9 & 6 & 2.86 & 3.89 & 4.42 & 9.57 \\
+9 & 7 & 0.38 & 0.98 & 3.16 & 3.91 \\
+9 & 8 & 1.97 & 3.46 & 6 & 12.07 \\
+9 & 9 & 2.58 & 4.04 & 1.37 & 2.55 \\
+9 & 10 & 1.91 & 2.54 & 3.03 & 4.36 \\
+9 & 11 & 1.75 & 4.15 & 3.21 & 7.96 \\
+9 & 12 & 2.33 & 2.98 & 5.12 & 7.67 \\
+\end{longtable}
+
+Figure \ref{fig:Fig9} renders these quantities on the reconstructed three-dimensional
+lining. Panel (a) shows the radial-deviation heatmap, in which the
+deviation from the nominal design circle varies continuously around and
+along the tunnel, the crown region appearing in the negative end of the
+scale and the haunch and invert regions in the positive end. Panels (b)
+and (c) map the joint dislocation and joint rotation onto the segment
+patches, the dislocation field in panel (b) showing pale, evenly
+distributed patches and the rotation field in panel (c) showing a
+sparser set of darker patches concentrated at particular ring positions,
+including the rings that registered the highest rotation magnitudes in
+Tables 9 and 11. Also, cross-sections of each ring along the radial
+deformation are presented in Figure \ref{fig:FigA1} and Figure \ref{fig:FigA2} in Appendix
+\ref{appendix-a--per-ring-deformation-cross-section}.
+
+The per-ring quantities are then serialised for the stage that follows.
+For each ring, the clearance convergence and the maximum joint
+dislocation are written together with the ovalization, ellipticity,
+rotation, and fit RMSE into a per-ring record keyed by tunnel and ring
+number; the per-joint dislocation and rotation values of Table 11 and
+the ovalization-agreement statistics of Table 10 are stored alongside
+them. These records, exported as the JSON and CSV files read by the
+ontology-based decision stage of Section 4.3, hold the per-ring
+clearance convergence and joint dislocation that form the numeric
+channel of that stage.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}{\textwidth}
+    \centering
+    \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture09a.pdf}
+    \caption{Radial-deviation heatmap}
+    \label{fig:Fig9a}
+  \end{subfigure}
+\end{figure}
+
+\begin{figure}[htbp]\ContinuedFloat
+  \centering
+  \begin{subfigure}{\textwidth}
+    \centering
+    \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture09b.pdf}
+    \caption{Joint dislocation}
+    \label{fig:Fig9b}
+  \end{subfigure}
+\end{figure}
+
+\begin{figure}[htbp]\ContinuedFloat
+  \centering
+  \begin{subfigure}{\textwidth}
+    \centering
+    \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture09c.pdf}
+    \caption{Joint rotation}
+    \label{fig:Fig9c}
+  \end{subfigure}
+  \caption{Three-dimensional rendering of the reconstructed test-tunnel lining: (a) radial-deviation heatmap, (b) joint dislocation, and (c) joint rotation.}
+  \label{fig:Fig9}
+\end{figure}
+
+
+
+\subsection{Ontology-Based Decision
+Support}\label{ontology-based-decision-support}
+
+The schema-guided extraction resulted in 51 FMEA reasoning chains,
+derived from the seven sections of the Chinese urban-rail maintenance
+codes governing, and Table \ref{tab:12} organizes these chains based on the
+degradation mechanism. Eleven classes of mechanisms are shown. The most
+populated is water leakage, with ten chains, then convergence
+deformation (eight), longitudinal deformation (six). Joint dislocation
+and joint opening each account for five chains. The chains are
+classified into ten component categories, where segment lining is the
+most dominant category with twenty-four chains, followed by structural
+connection with eleven chains, while the remaining categories cover
+cut-and-cover structures, track bed, waterproofing system, bolts and
+ancillary openings.
+
+Each chain has its indicators, the indicator units, and the source
+standard, so the variety of the measurable evidence is directly visible
+in the table. Deformation mechanisms are expressed as geometric
+indicators in ‰ D, in mm. Leakage and durability mechanisms are
+expressed as count-based indicators, e.g., defects per hundred square
+meters. Source attribution is uneven across the two main codes. The
+largest share of chains comes from CJJ/T 289, with the
+DGTJ 08-2123 appendices and GB 50911 providing the rest. The single GB
+50208 entry provides the leakage-grade definition.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2074}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.1086}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2373}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2274}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.2193}}@{}}
+\caption{Extracted FMEA knowledge base (rule layer), grouped by
+degradation mechanism.}
+\label{tab:12}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Mechanism category}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Chains}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Main component(s)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Indicator(s)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Source standard(s)}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Water Leakage & 10 & Structural Connection, Waterproofing System &
+L/(m\textsuperscript{2}$\cdot$d), L/d, count/100m\textsuperscript{2}, m\textsuperscript{2}, ratio (per 1000) & CJJ/T 289 Sec7; CJJ/T
+289 Sec5 \\
+Convergence Deformation & 8 & Segment Lining, Cut and Cover Structure &
+L0 ratio, mm, ratio of {[}k{]}, ratio of {[}$\xi${]}, \textperthousand D & DGTJ 08-2123
+Sec5; DGTJ 08-2123 App H \\
+Longitudinal Deformation & 6 & Segment Lining, Cut and Cover Structure &
+\% L, 1/m (curvature), mm, \textperthousand{} & GB 50911 Sec9-10-11; DGTJ 08-2123 App
+H \\
+Joint Dislocation & 5 & Structural Connection, Cut and Cover Structure &
+mm & DGTJ 08-2123 App G; CJJ/T 289 Sec5 \\
+Joint Opening & 5 & Structural Connection, Cut and Cover Structure & mm
+& DGTJ 08-2123 App G; CJJ/T 289 Sec5 \\
+Cracking & 4 & Segment Lining, Track Bed & mm & CJJ/T 289 Sec7; CJJ/T
+289 Sec5 \\
+Steel Bolt Corrosion & 3 & Segment Lining, Bolt & \% & CJJ/T 289 Sec5;
+CJJ/T 289 Sec7 \\
+Void Behind Lining & 3 & Track Bed, Segment Lining & m, m\textsuperscript{2}, mm & CJJ/T
+289 Sec5; CJJ/T 289 Sec7 \\
+Insufficient Capacity & 3 & Segment Lining, Bolt & m, ratio & DGTJ
+08-2123 Sec5; CJJ/T 289 Sec5 \\
+Material Degradation & 2 & Segment Lining & qualitative & CJJ/T 289
+Sec5; CJJ/T 289 Sec7 \\
+Spalling Peeling & 2 & Segment Lining & m\textsuperscript{2}, mm & CJJ/T 289 Sec5; DGTJ
+08-2123 Sec5 \\
+\textbf{Total} & \textbf{51} & 10 component categories & - & 7 standard
+sections \\
+\end{longtable}
+
+Table \ref{tab:13} provides the decision for each of the twenty-five rings of the
+two held-out tunnels, showing the convergence ratio and its graded
+level, the joint dislocation and its graded level, the resulting ring
+health level (and visualised in Figure \ref{fig:Fig10}), the assigned tier, and the
+source clause by which each grade was assigned. Convergence, calculated
+as the reduction of horizontal clearance and graded on the staggered
+joint bands of CJJ/T 289, is between 1.59 and 4.22 ‰D across
+Tunnel 8 and between 2.71 and 4.93 ‰D across Tunnel 9; the joint
+dislocation, graded on Table 4, ranges from 1.6 to 5.4 mm and from 1.0
+to 5.2 mm in the two tunnels. The ring health level is the more severe
+of the two indicator grades, with each ring resolving to either level 1
+or level 2 on the five-level scale for both tunnels.
+
+In the provenance column, the local clause responsible for setting the
+grade is recorded for each ring, so that each numeric decision in the
+table is linked to the originating standard band and table, not to a
+hard-coded threshold. In Tunnel 8, nine of the 13 rings are graded level
+1 and four are level 2; in Tunnel 9, four of the 12 rings are level 1
+and eight are level 2. Each ring in both tunnels is assigned a tier in
+the acceptable-to-monitor range of the maintenance scale. When only the
+deformation indicators are used, no ring is assigned to the
+planned-repair or higher tiers.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.0803}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.0594}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.1098}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.0998}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.1294}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.1436}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.1056}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.1596}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 16\tabcolsep) * \real{0.1125}}@{}}
+\caption{Per-Ring decision with standard provenance.}
+\label{tab:13}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Tunnel}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ring}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Conv. (D)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Conv. lvl}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Conv. band}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Disloc. (mm)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Disloc. lvl}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ring health lvl}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Tier}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+8 & 1 & 2.24 & 1 & $0 \le c \le 4$ & 3.0 & 1 & 1 & Acceptable \\
+8 & 2 & 2.40 & 1 & $0 \le c \le 4$ & 5.4 & 2 & 2 & Monitor \\
+8 & 3 & 2.17 & 1 & $0 \le c \le 4$ & 1.8 & 1 & 1 & Acceptable \\
+8 & 4 & 1.59 & 1 & $0 \le c \le 4$ & 2.2 & 1 & 1 & Acceptable \\
+8 & 5 & 3.38 & 1 & $0 \le c \le 4$ & 2.7 & 1 & 1 & Acceptable \\
+8 & 6 & 2.94 & 1 & $0 \le c \le 4$ & 1.6 & 1 & 1 & Acceptable \\
+8 & 7 & 2.48 & 1 & $0 \le c \le 4$ & 2.6 & 1 & 1 & Acceptable \\
+8 & 8 & 2.29 & 1 & $0 \le c \le 4$ & 4.7 & 2 & 2 & Monitor \\
+8 & 9 & 4.22 & 2 & $4 < c \le 6$ & 2.6 & 1 & 2 & Monitor \\
+8 & 10 & 2.42 & 1 & $0 \le c \le 4$ & 3.1 & 1 & 1 & Acceptable \\
+8 & 11 & 3.91 & 1 & $0 \le c \le 4$ & 3.3 & 1 & 1 & Acceptable \\
+8 & 12 & 3.80 & 1 & $0 \le c \le 4$ & 4.3 & 2 & 2 & Monitor \\
+8 & 13 & 3.36 & 1 & $0 \le c \le 4$ & 3.9 & 1 & 1 & Acceptable \\
+9 & 1 & 4.60 & 2 & $4 < c \le 6$ & 2.5 & 1 & 2 & Monitor \\
+9 & 2 & 3.73 & 1 & $0 \le c \le 4$ & 3.9 & 1 & 1 & Acceptable \\
+9 & 3 & 4.93 & 2 & $4 < c \le 6$ & 2.5 & 1 & 2 & Monitor \\
+9 & 4 & 4.07 & 2 & $4 < c \le 6$ & 3.4 & 1 & 2 & Monitor \\
+9 & 5 & 3.57 & 1 & $0 \le c \le 4$ & 5.2 & 2 & 2 & Monitor \\
+9 & 6 & 4.50 & 2 & $4 < c \le 6$ & 3.9 & 1 & 2 & Monitor \\
+9 & 7 & 3.88 & 1 & $0 \le c \le 4$ & 1.0 & 1 & 1 & Acceptable \\
+9 & 8 & 3.20 & 1 & $0 \le c \le 4$ & 3.5 & 1 & 1 & Acceptable \\
+9 & 9 & 2.71 & 1 & $0 \le c \le 4$ & 4.0 & 2 & 2 & Monitor \\
+9 & 10 & 3.66 & 1 & $0 \le c \le 4$ & 2.5 & 1 & 1 & Acceptable \\
+9 & 11 & 3.60 & 1 & $0 \le c \le 4$ & 4.2 & 2 & 2 & Monitor \\
+9 & 12 & 4.34 & 2 & $4 < c \le 6$ & 3.0 & 1 & 2 & Monitor \\
+\end{longtable}
+
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/Picture10.pdf}
+  \caption{ Distribution of ring health levels along the tunnels}
+  \label{fig:Fig10}
+\end{figure}
+
+
+The ring-level results of the tunnel scale are summarised in Table \ref{tab:14}
+and presented against the vision channel leakage evidence. In both
+tunnels, the worst deformation level is 2, which is consistent with the
+ring distributions in Table B. The leakage channel differs between the
+two tunnels. Tunnel 8 is graded at leakage level 4 and has a
+linear-leakage class of an estimated 4.0 m 2. Tunnel 9 is graded at
+leakage level 2 and has a seepage class of an estimated 0.94
+m\textsuperscript{2}.
+
+The overall tire for Tunnel 8 is given as level 4, Action Required by
+its leakage grade, following the max-severity rule, which combines the
+structural and leakage channels. The overall tier for Tunnel 9 is at
+level 2, Monitor, which is consistent with its worst deformation level
+and its leakage level. The governing-channel column directly records
+this difference, associating the outcome of the Tunnel 8 with the
+leakage channel and the outcome of the Tunnel 9 with a deformation grade
+that is not exceeded by the leakage channel.
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.0803}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.0798}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1695}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1496}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1595}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.0997}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1296}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 14\tabcolsep) * \real{0.1320}}@{}}
+\caption{Tunnel-Level decision summary.}
+\label{tab:14}\\
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Tunnel}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Rings}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Ring health levels (count)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Worst deformation level}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Leakage class (area)}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Leakage level}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Overall tier}
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+\textbf{Governing channel}
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+8 & 13 & L1×9, L2×4 & 2 & Linear Leakage (4.0 m²) & 4 & \textbf{Action
+Required (L4)} & Leakage \\
+9 & 12 & L1×4, L2×8 & 2 & Seepage (0.94 m²) & 2 & \textbf{Monitor (L2)}
+& Deformation \\
+\end{longtable}
+
+\section{Conclusion}\label{conclusion}
+
+The goal of this study was to close the loop that most tunnel
+digital-twin frameworks leave open, carrying raw point-cloud and image
+evidence through to a standard referenced maintenance prescription
+rather than stopping at detection or forecast. The pipeline integrates a
+self-supervised point-cloud segmentation stage, a geometric
+deformation-reconstruction stage, and an ontology-based decision layer.
+The pipeline was exercised end-to-end on two fully held-out
+shield-tunnel sections of the Nanjing Metro, with an Australian
+reference structure provided as supplementary training data.
+
+The best performing configuration for leakage perception was full
+fine-tuning of the Sonata encoder on the in-domain S3DIS leakage data at
+full supervision (10\% of the total scanned dataset), with a leakage IoU
+of 94.34, mean IoU of 93.90, and mean accuracy of 98.60, with an overall
+accuracy and macro-F1 of 0.97 and a Cohen's $\kappa$ and MCC of 0.95. The given
+fine-tuned model performed better than the strongest external
+point-cloud baseline on the same, but the whole of the benchmark, the
+BBE-Net ensemble, on both leakage IoU and mean accuracy. At the class
+level, the leakage region recovered at an IoU of 0.945 and a recall of
+0.943. Segments, pockets, and joints were segmented at IoUs of 1.000,
+0.974, and 0.840, respectively, the lower joint value reflecting the
+small fraction of true-leakage points that the confusion matrix assigned
+to the adjacent joint class.
+
+The experiments on data combination and data fraction provided useful
+results for practical annotation. In all matched settings, full
+fine-tuning beat linear probing. The in-domain S3DIS data with abundant
+labels resulted in the best performance. The encoder was free to adapt,
+with the S3DIS-only model at full supervision (94.34 leakage IoU)
+standing on top of its S3DIS -ART counterpart (92.17). The additional
+Australian data demonstrated its performance in the setting with scarce
+labels and a frozen encoder, improving the 25\% linear-probe leakage IoU
+from 45.41 to 70.02 and the corresponding accuracy from 0.69 to 0.83.
+The picture for label-efficiency is correspondingly favourable: full
+fine-tuning retained an accuracy of 0.93 and a leakage IoU of 87.59 with
+only a quarter of the labels, and since the annotated pool was itself
+one-tenth of the scanned corpus, that quarter-budget corresponds to
+about 2.5\% of the available scan data. Thus, strong leakage
+segmentation can be obtained at a small fraction of the labelling effort
+assumed by previous work, with cross-site auxiliary data acting as a
+surrogate for labels precisely in the low-annotation regime where it is
+most needed.
+
+The deformation stage reduced each reconstructed ring to a stable set of
+indicators across both held-out tunnels. Clearance convergence ranged
+from 1.59 to 4.22 ‰D in Tunnel 8 and from 2.71 to 4.93 ‰D in Tunnel 9,
+with ovalization between 40 to 52 mm, maximum joint dislocation at 5.4
+mm, and joint rotation from 2° to 9°, except for two rings that reached
+about 12°. The ovalization, the most sensitive indicator, was calculated
+through multi-zone polynomial reconstruction and a raw conic fit,
+resulting in a mean absolute difference of 1.37 mm (1.15 mm in Tunnel 8
+and 1.62 mm in Tunnel 9), with a maximum discrepancy of 3.6 mm for the
+highest-ovalization ring. This method reduced the impact of acquisition
+errors, ensuring that systematic offsets in input geometry do not skew
+the structural grade, thus validating the deformation evidence through
+cross-method agreement and consistent measurements.
+
+The decision layer converted this perceptual and geometric evidence into
+prescriptions that were traceable and referenced to standards.
+Schema-guided extraction populated 51 FMEA reasoning chains from seven
+sections of the governing Chinese urban-rail codes over eleven
+degradation mechanisms. Each of the twenty-five rings was graded by
+traversing these chains against its measured indicators; the fired band
+and originating clause were retained for each decision. From the
+deformation indicators alone, all rings were resolved to health levels 1
+and 2, the acceptable-to-monitor range. The leakage channel then
+separated the two tunnels, promoting Tunnel 8 to an Action-Required tier
+on a linear-leakage class over an estimated 4.0 m², while Tunnel 9
+remained at Monitor under a smaller seepage area. Each grade is taken
+from the populated rule base rather than a hard-coded threshold, so a
+superseding standard or different tunnel type can be accommodated by
+revising the rule base alone, and every prescription remains inspectable
+back to the clause that governs it.
+
+Many additional mechanisms manifest visually rather than geometrically,
+making them difficult to capture from point-cloud data alone. Extending
+the methodology to image-based foundation models for photographic
+evidence of cracks and surface defects, in a self-supervised and
+label-efficient manner, would complement the geometric analysis and
+align with the multimodal design intent.
+
+The knowledge layer is currently based on Chinese urban-rail standards,
+using minimal information for each stage. Integrating maintenance and
+acceptance guidelines from other jurisdictions would enhance its
+applicability and test the extraction against various regulatory
+vocabularies without changing the underlying pipeline.
+
+Lastly, the assessment relies on a single scan epoch, reflecting
+deviation from nominal design geometry rather than in-service changes.
+Incorporating periodic scanning campaigns would transform these static
+grades into deformation trajectories, enabling tracking of changes over
+time and moving toward predictive maintenance scheduling.
+
+\section*{Acknowledgements}\label{acknowledgements}
+\addcontentsline{toc}{section}{Acknowledgements}
+
+The authors acknowledge the support of the asset client for facilitating
+access to the case study tunnel for the multimodal sensing campaign, and
+of industry partners who contributed to validation of the FMEA
+extraction results.
+
+\section*{Declaration}\label{declaration}
+\addcontentsline{toc}{section}{Declaration}
+
+The authors declare no competing interests. Large language models (LLM)
+were used in this work in two distinct capacities. As part of the
+research methodology, Anthropic Claude (Claude Opus 4.8) was used for
+schema-guided extraction of FMEA reasoning chains from maintenance
+standards under expert validation; this use is described in full in
+Section X, including model version. Separately, a large language model
+was used to assist with language editing and readability during
+manuscript preparation. After using these tools, the authors reviewed
+and edited all such content as needed and took full responsibility for
+the content of the publication.
+
+\section*{Data availability}\label{data-availability}
+\addcontentsline{toc}{section}{Data availability}
+
+The scanning dataset from Australian tunnel is subject to operator
+confidentiality and cannot be released. The S3DIS dataset is available
+online from:
+
+\url{https://www.kaggle.com/datasets/yueqianshen/s3dis-leakage}
+
+
+\clearpage
+\bibliographystyle{elsarticle-harv}
+\nocite{*}
+\bibliography{references_elsevier}
+
+\clearpage
+\section*{Appendix A- Per-Ring deformation
+cross-section}\label{appendix-a--per-ring-deformation-cross-section}
+\addcontentsline{toc}{section}{Appendix A- Per-Ring deformation
+cross-section}
+
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/PictureA1.pdf}
+  \caption{ Per-ring radial deformation for tunnel 8}
+  \label{fig:FigA1}
+\end{figure}
+
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{Fig_PDF/PictureA2.pdf}
+  \caption{ Per-ring radial deformation for tunnel 9}
+  \label{fig:FigA2}
+\end{figure}
+
+\section*{Appendix C- FMEA-chain extraction
+pipeline}\label{appendix-c--fmea-chain-extraction-pipeline}
+\addcontentsline{toc}{section}{Appendix C- FMEA-chain extraction
+pipeline}
+
+The pseudocode below describes the schema-guided extraction pipeline
+used to build the FMEA knowledge base of Section {[}X{]}. The standards
+corpus is read and split into fixed-size character chunks, each chunk is
+sent to a large language model under a system prompt that injects the
+controlled vocabulary and a strict JSON schema, the returned JSON array
+is parsed, and all parsed records are accumulated into the knowledge
+base together with a per-chunk timing and provenance log. Generation is
+deterministic (temperature 0, fixed seed).
+
+\begin{algorithm}[H]
+\caption{Schema-guided FMEA-chain extraction with optional vision perception.}
+\label{alg:fmea}
+\begin{algorithmic}[1]
+\Require Ordered standards corpus
+  $\mathcal{S}=[(\mathit{file}_1,\mathit{label}_1),\dots]$;
+  controlled vocabulary $V$ (component, mechanism, health-level, indicator,
+  intervention tokens); output schema $\Sigma$; language model $\mathcal{M}$
+  (Claude Opus~4.8); chunk size $c$ (characters); decoding parameters
+  $\theta=(\text{temperature}=0,\ \text{seed},\ \text{context window})$.
+\Ensure FMEA-chain set $\mathcal{F}$ and run log $\mathcal{L}$.
+\State $\mathcal{F}\gets[\,]$;\quad $\mathcal{L}\gets[\,]$;\quad
+  $\mathit{Chunks}\gets[\,]$
+\State $P_{\text{sys}}\gets \Call{BuildSystemPrompt}{\Sigma,V}$
+  \Comment{controlled vocabulary injected verbatim}
+\For{each $(\mathit{file},\mathit{label})\in\mathcal{S}$}
+  \Comment{Step 1: read and chunk}
+  \State $\mathit{text}\gets\Call{ReadUTF8}{\mathit{file}}$;\quad
+    $\mathit{start}\gets 0$;\quad $k\gets 1$
+  \While{$\mathit{start}<\Call{Length}{\mathit{text}}$}
+    \State $\mathit{end}\gets \mathit{start}+c$
+    \If{$\mathit{end}<\Call{Length}{\mathit{text}}$}
+      \State $\mathit{end}\gets\Call{NextNewlineAtOrAfter}{\mathit{text},\mathit{end}}$
+        \Comment{break on a line boundary}
+    \EndIf
+    \State $\mathit{chunk}\gets\Call{Trim}{\mathit{text}[\mathit{start}:\mathit{end}]}$
+    \If{$\mathit{chunk}$ is non-empty}
+      \State append $(\mathit{label},k,\mathit{chunk})$ to $\mathit{Chunks}$;\quad
+        $k\gets k+1$
+    \EndIf
+    \State $\mathit{start}\gets \mathit{end}+1$
+  \EndWhile
+\EndFor
+\For{each $(\mathit{label},k,\mathit{chunk})\in\mathit{Chunks}$}
+  \Comment{Step 2: extract per chunk}
+  \State $P_{\text{user}}\gets\Call{FormatUserPrompt}{\mathit{label},k,\mathit{chunk}}$
+  \State $\mathit{raw}\gets\mathcal{M}\bigl(P_{\text{sys}},P_{\text{user}};
+    \theta,\text{format}=\text{JSON}\bigr)$
+    \Comment{schema-constrained generation}
+  \State $R\gets\Call{ParseJSONArray}{\mathit{raw}}$
+    \Comment{strip fences; tolerant parse}
+  \If{$R$ is not a list}
+    \State $R\gets[R]$ if $R$ is a non-empty object, else $R\gets[\,]$
+  \EndIf
+  \State append all records in $R$ to $\mathcal{F}$
+  \State append $(\mathit{label},k,|R|,\mathit{elapsed})$ to $\mathcal{L}$
+\EndFor
+\If{vision is enabled}
+  \Comment{Step 3: optional RGB perception}
+  \For{each image $I$ in $\mathit{ImageDir}$}
+    \State $r\gets\mathcal{M}_{\text{vision}}\bigl(P_{\text{sys}}^{\text{vision}},
+      \Call{FormatVisionPrompt}{I};\theta\bigr)$
+    \If{$r$ is an object}
+      \State append $r$ to $\mathcal{F}_{\text{image}}$
+    \EndIf
+    \State append $(\text{image name},\mathit{elapsed},\text{status})$ to $\mathcal{L}$
+  \EndFor
+\EndIf
+\State \Call{Save}{$\mathcal{F},\mathcal{F}_{\text{image}},\mathcal{L}$}
+  \Comment{JSON knowledge base + run log}
+\State \Return $(\mathcal{F},\mathcal{L})$
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{Notes on the schema constraint.} The system prompt fixes the
+domain to segmental shield metro linings and the authoritative severity
+scale to the five-level health degree of CJJ/T 289 (Level 1 best to
+Level 5 worst). The model is instructed to (i) return only a JSON array
+with no fields outside the schema, (ii) use only controlled-vocabulary
+tokens and otherwise emit null rather than invent a token, (iii) copy
+graded numeric bands verbatim into grade\_bands with their unit and
+source clause, never paraphrasing a number, (iv) map qualitative leakage
+descriptions to the leakage-class tokens and health levels while
+recording the source clause, and (v) return an empty array for chunks
+that contain no FMEA-relevant content. Each emitted record carries its
+source\_documents label and per-threshold source\_reference, so that
+every chain in the resulting knowledge base is traceable to the clause
+or table it was drawn from.
+
+
+\end{document}

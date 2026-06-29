@@ -1,0 +1,39 @@
+{
+  "health_scale": {
+    "1": {"tier": "Acceptable", "action": "Continue routine inspection."},
+    "2": {"tier": "Monitor", "action": "Increase observation frequency and retain evidence."},
+    "3": {"tier": "Planned Repair", "action": "Plan corrective maintenance and engineering review."},
+    "4": {"tier": "Action Required", "action": "Prioritise intervention and verify local causes."},
+    "5": {"tier": "Urgent", "action": "Immediate engineering assessment and risk control."}
+  },
+  "rules": [
+    {
+      "id": "CJJT289-CONV-STAGGERED",
+      "indicator": "convergence_per_mille_d",
+      "label": "Convergence ratio",
+      "unit": "per mille D",
+      "source_reference": "CJJ/T 289 deformation table, staggered joint band",
+      "bands": [
+        {"min": 0, "max": 4, "level": 1, "band": "0 <= c <= 4"},
+        {"min": 4, "max": 6, "level": 2, "band": "4 < c <= 6"},
+        {"min": 6, "max": 10, "level": 3, "band": "6 < c <= 10"},
+        {"min": 10, "max": 15, "level": 4, "band": "10 < c <= 15"},
+        {"min": 15, "max": null, "level": 5, "band": "c > 15"}
+      ]
+    },
+    {
+      "id": "CJJT289-DISLOCATION",
+      "indicator": "dislocation_mm",
+      "label": "Joint dislocation",
+      "unit": "mm",
+      "source_reference": "CJJ/T 289 Table 4 joint dislocation band",
+      "bands": [
+        {"min": 0, "max": 4, "level": 1, "band": "0 <= d < 4", "upper_inclusive": false},
+        {"min": 4, "max": 6, "level": 2, "band": "4 <= d <= 6", "lower_inclusive": true},
+        {"min": 6, "max": 10, "level": 3, "band": "6 < d <= 10"},
+        {"min": 10, "max": 20, "level": 4, "band": "10 < d <= 20"},
+        {"min": 20, "max": null, "level": 5, "band": "d > 20"}
+      ]
+    }
+  ]
+}
