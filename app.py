@@ -14,20 +14,20 @@ from tunvision.reasoning import grade_rings, summarize_tunnels
 
 ROOT = Path(__file__).parent
 DATA = ROOT / "data"
-ASSETS = ROOT / "assets"
 
 
 st.set_page_config(page_title="TunVision", page_icon="TV", layout="wide")
 
 
 @st.cache_data
-def load_defaults() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+def load_defaults() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
     rings = pd.read_csv(DATA / "ring_indicators.csv")
     leakage = pd.read_csv(DATA / "leakage_evidence.csv")
     performance = pd.read_csv(DATA / "model_performance.csv")
     class_iou = pd.read_csv(DATA / "class_iou.csv")
+    ovalization = pd.read_csv(DATA / "ovalization_comparison.csv")
     rules = json.loads((DATA / "fmea_rules.json").read_text(encoding="utf-8"))
-    return rings, leakage, performance, class_iou, rules
+    return rings, leakage, performance, class_iou, ovalization, rules
 
 
 def load_uploaded_csv(upload, default: pd.DataFrame) -> pd.DataFrame:
@@ -104,7 +104,185 @@ def point_cloud_figure(cloud: pd.DataFrame, color_by: str | None) -> go.Figure:
     return fig
 
 
-default_rings, default_leakage, default_performance, default_class_iou, default_rules = load_defaults()
+def workflow_figure() -> go.Figure:
+    nodes = [
+        ("Evidence", 0.05, 0.78, "ART and S3DIS scans<br>leakage evidence<br>standards corpus"),
+        ("Preprocess", 0.25, 0.78, "cleaning<br>ring partitioning<br>XYZ/RGB/normal features"),
+        ("Sonata", 0.45, 0.78, "self-supervised encoder<br>upcasting<br>linear segmentation head"),
+        ("Deformation", 0.65, 0.78, "PCA alignment<br>fixed-radius fit<br>multi-zone polynomial"),
+        ("Decision", 0.85, 0.78, "FMEA rules<br>health grade<br>maintenance tier"),
+    ]
+    fig = go.Figure()
+    for idx, (title, x, y, body) in enumerate(nodes, start=1):
+        fig.add_shape(
+            type="rect",
+            x0=x - 0.085,
+            x1=x + 0.085,
+            y0=y - 0.16,
+            y1=y + 0.16,
+            line={"color": "#94a3b8", "width": 1.4},
+            fillcolor="#f8fafc",
+            layer="below",
+        )
+        fig.add_annotation(x=x, y=y + 0.075, text=f"<b>Stage {idx}</b><br>{title}", showarrow=False, font={"size": 13})
+        fig.add_annotation(x=x, y=y - 0.055, text=body, showarrow=False, font={"size": 11, "color": "#475569"})
+        if idx < len(nodes):
+            next_x = nodes[idx][1]
+            fig.add_annotation(
+                x=next_x - 0.095,
+                y=y,
+                ax=x + 0.095,
+                ay=y,
+                xref="x",
+                yref="y",
+                axref="x",
+                ayref="y",
+                showarrow=True,
+                arrowhead=3,
+                arrowwidth=2,
+                arrowcolor="#2563eb",
+            )
+    fig.add_shape(type="line", x0=0.44, x1=0.68, y0=0.52, y1=0.52, line={"color": "#64748b", "dash": "dot"})
+    fig.add_annotation(x=0.56, y=0.47, text="perceptual + geometric evidence", showarrow=False, font={"size": 11, "color": "#475569"})
+    fig.update_xaxes(visible=False, range=[0, 1])
+    fig.update_yaxes(visible=False, range=[0.35, 1])
+    fig.update_layout(height=360, margin={"l": 10, "r": 10, "t": 20, "b": 10}, plot_bgcolor="white")
+    return fig
+
+
+def sonata_architecture_figure() -> go.Figure:
+    blocks = [
+        ("Point features", 0.08, "x y z<br>colour<br>normal k=15"),
+        ("Serialised patches", 0.27, "space filling order<br>shifted point patches"),
+        ("PTv3 / Sonata encoder", 0.48, "xCPE<br>self-attention<br>MLP residual blocks"),
+        ("Training-free upcasting", 0.70, "dense point features<br>no learned decoder"),
+        ("Segmentation head", 0.90, "linear + softmax<br>4 lining classes"),
+    ]
+    fig = go.Figure()
+    for i, (title, x, body) in enumerate(blocks):
+        fig.add_shape(
+            type="rect",
+            x0=x - 0.085,
+            x1=x + 0.085,
+            y0=0.42,
+            y1=0.74,
+            line={"color": "#64748b"},
+            fillcolor="#eef6ff" if i in {2, 3} else "#f8fafc",
+        )
+        fig.add_annotation(x=x, y=0.63, text=f"<b>{title}</b>", showarrow=False, font={"size": 12})
+        fig.add_annotation(x=x, y=0.51, text=body, showarrow=False, font={"size": 10, "color": "#475569"})
+        if i < len(blocks) - 1:
+            fig.add_annotation(
+                x=blocks[i + 1][1] - 0.095,
+                y=0.58,
+                ax=x + 0.095,
+                ay=0.58,
+                xref="x",
+                yref="y",
+                axref="x",
+                ayref="y",
+                showarrow=True,
+                arrowhead=3,
+                arrowcolor="#2563eb",
+                arrowwidth=2,
+            )
+    for j, label in enumerate(["leakage", "joints", "segments", "pockets"]):
+        fig.add_shape(type="circle", x0=0.82 + j * 0.045, x1=0.845 + j * 0.045, y0=0.22, y1=0.245, fillcolor=["#ef4444", "#f59e0b", "#22c55e", "#3b82f6"][j], line_width=0)
+        fig.add_annotation(x=0.832 + j * 0.045, y=0.18, text=label, showarrow=False, font={"size": 9})
+    fig.update_xaxes(visible=False, range=[0, 1])
+    fig.update_yaxes(visible=False, range=[0.12, 0.82])
+    fig.update_layout(height=340, margin={"l": 10, "r": 10, "t": 20, "b": 10}, plot_bgcolor="white")
+    return fig
+
+
+def tunnel_surface_figure(rings: pd.DataFrame, value_column: str, title: str) -> go.Figure:
+    theta = np.linspace(-0.82 * np.pi, 0.82 * np.pi, 80)
+    sorted_rings = rings.sort_values(["tunnel", "ring"])
+    fig = go.Figure()
+    for tunnel, group in sorted_rings.groupby("tunnel", sort=True):
+        xs, ys, zs, vals = [], [], [], []
+        tunnel_offset = 0 if int(tunnel) == 8 else 9.5
+        for _, row in group.iterrows():
+            x = tunnel_offset + float(row["ring"])
+            radius = 2.75 + (float(row["ovalization_mm"]) / 1000.0) * np.cos(2 * theta)
+            xs.append(np.full_like(theta, x))
+            ys.append(radius * np.cos(theta))
+            zs.append(radius * np.sin(theta))
+            vals.append(np.full_like(theta, float(row[value_column])))
+        fig.add_trace(
+            go.Surface(
+                x=np.array(xs),
+                y=np.array(ys),
+                z=np.array(zs),
+                surfacecolor=np.array(vals),
+                colorscale="Turbo",
+                colorbar={"title": value_column.replace("_", " "), "len": 0.75},
+                showscale=int(tunnel) == 9,
+                name=f"Tunnel {tunnel}",
+            )
+        )
+    fig.update_layout(
+        title=title,
+        height=560,
+        margin={"l": 0, "r": 0, "t": 45, "b": 0},
+        scene={
+            "aspectmode": "data",
+            "xaxis_title": "Ring position",
+            "yaxis_title": "Transverse",
+            "zaxis_title": "Vertical",
+        },
+    )
+    return fig
+
+
+def radial_profile_figure(rings: pd.DataFrame, tunnel: int) -> go.Figure:
+    theta = np.linspace(-0.9 * np.pi, 0.9 * np.pi, 160)
+    fig = go.Figure()
+    for _, row in rings[rings["tunnel"].eq(tunnel)].iterrows():
+        radius = 2.75 + (float(row["ovalization_mm"]) / 1000.0) * np.cos(2 * theta)
+        radius -= (float(row["convergence_per_mille_d"]) / 1000.0) * 2.75 * np.sin(theta) ** 2
+        fig.add_trace(
+            go.Scatter(
+                x=radius * np.cos(theta),
+                y=radius * np.sin(theta),
+                mode="lines",
+                line={"width": 1.2},
+                name=f"R{int(row['ring'])}",
+                hovertemplate="Ring %{fullData.name}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>",
+            )
+        )
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.update_layout(
+        title=f"Generated radial deformation profiles: Tunnel {tunnel}",
+        height=430,
+        margin={"l": 10, "r": 10, "t": 45, "b": 10},
+        xaxis_title="Transverse coordinate (m)",
+        yaxis_title="Vertical coordinate (m)",
+    )
+    return fig
+
+
+def ovalization_agreement_figure(ovalization: pd.DataFrame) -> go.Figure:
+    fig = px.scatter(
+        ovalization,
+        x="raw_conic_ovalization_mm",
+        y="polynomial_ovalization_mm",
+        color="tunnel",
+        hover_data=["ring", "abs_difference_mm"],
+        labels={
+            "raw_conic_ovalization_mm": "Raw-conic ovalization (mm)",
+            "polynomial_ovalization_mm": "Pipeline polynomial ovalization (mm)",
+        },
+        title="Ovalization agreement generated from Table 10",
+    )
+    lo = min(ovalization["raw_conic_ovalization_mm"].min(), ovalization["polynomial_ovalization_mm"].min()) - 1
+    hi = max(ovalization["raw_conic_ovalization_mm"].max(), ovalization["polynomial_ovalization_mm"].max()) + 1
+    fig.add_trace(go.Scatter(x=[lo, hi], y=[lo, hi], mode="lines", line={"dash": "dash", "color": "#64748b"}, name="1:1 line"))
+    fig.update_layout(height=430)
+    return fig
+
+
+default_rings, default_leakage, default_performance, default_class_iou, default_ovalization, default_rules = load_defaults()
 
 with st.sidebar:
     st.title("TunVision")
@@ -121,6 +299,7 @@ rings = load_uploaded_csv(ring_upload, default_rings)
 leakage = load_uploaded_csv(leakage_upload, default_leakage)
 performance = default_performance.copy()
 class_iou = default_class_iou.copy()
+ovalization = default_ovalization.copy()
 ruleset = load_uploaded_rules(rule_upload, default_rules)
 point_cloud = read_point_cloud(point_cloud_upload)
 
@@ -207,9 +386,7 @@ with tabs[0]:
                 unsafe_allow_html=True,
             )
 
-    image_path = ASSETS / "workflow_page.png"
-    if image_path.exists():
-        st.image(str(image_path), caption="Rendered workflow page from the manuscript PDF", use_container_width=True)
+    st.plotly_chart(workflow_figure(), use_container_width=True)
 
 with tabs[1]:
     st.markdown("#### Point-cloud perception and machine-learning stage")
@@ -226,9 +403,7 @@ with tabs[1]:
             color_by = st.selectbox("Colour point-cloud preview by", color_options, format_func=lambda x: "None" if x is None else x)
             st.plotly_chart(point_cloud_figure(point_cloud, color_by), use_container_width=True)
         else:
-            sonar_page = ASSETS / "sonata_page.png"
-            if sonar_page.exists():
-                st.image(str(sonar_page), caption="Sonata architecture and point feature flow from the manuscript PDF", use_container_width=True)
+            st.plotly_chart(sonata_architecture_figure(), use_container_width=True)
             st.info("Upload a CSV/TXT/XYZ point cloud in the sidebar to preview scan evidence here.")
 
     with right:
@@ -278,19 +453,21 @@ with tabs[2]:
         )
         st.plotly_chart(deformation_fig, use_container_width=True)
     with c2:
-        render_page = ASSETS / "deformation_render_page.png"
-        if render_page.exists():
-            st.image(str(render_page), caption="3D radial-deviation, dislocation and rotation rendering from the PDF", use_container_width=True)
+        surface_metric = st.selectbox(
+            "Colour generated lining surface by",
+            ["convergence_per_mille_d", "ovalization_mm", "max_joint_dislocation_mm", "max_joint_rotation_deg"],
+        )
+        st.plotly_chart(
+            tunnel_surface_figure(rings, surface_metric, "Generated 3D lining surface from ring indicators"),
+            use_container_width=True,
+        )
 
-    image_cols = st.columns(3)
-    for col, filename, caption in [
-        (image_cols[0], "ovalization_page.png", "Polynomial vs raw-conic ovalization agreement"),
-        (image_cols[1], "tunnel8_radial_page.png", "Tunnel 8 radial deformation sections"),
-        (image_cols[2], "tunnel9_radial_page.png", "Tunnel 9 radial deformation sections"),
-    ]:
-        path = ASSETS / filename
-        if path.exists():
-            col.image(str(path), caption=caption, use_container_width=True)
+    o1, o2 = st.columns([1, 1])
+    with o1:
+        st.plotly_chart(ovalization_agreement_figure(ovalization), use_container_width=True)
+    with o2:
+        selected_profile_tunnel = st.radio("Radial profile tunnel", sorted(rings["tunnel"].unique()), horizontal=True)
+        st.plotly_chart(radial_profile_figure(rings, int(selected_profile_tunnel)), use_container_width=True)
 
 with tabs[3]:
     st.markdown("#### Tunnel-level prescription")
@@ -341,9 +518,17 @@ with tabs[3]:
     fig.update_yaxes(dtick=1, range=[0, 5])
     st.plotly_chart(fig, use_container_width=True)
 
-    decision_page = ASSETS / "decision_summary_page.png"
-    if decision_page.exists():
-        st.image(str(decision_page), caption="Decision summary page from the manuscript PDF", use_container_width=True)
+    decision_heatmap = graded.pivot(index="tunnel", columns="ring", values="ring_health_level")
+    heatmap = px.imshow(
+        decision_heatmap,
+        color_continuous_scale=["#2f855a", "#b7791f", "#c05621", "#c53030", "#742a2a"],
+        zmin=1,
+        zmax=5,
+        labels={"x": "Ring", "y": "Tunnel", "color": "Health level"},
+        title="Generated ring health heatmap",
+        aspect="auto",
+    )
+    st.plotly_chart(heatmap, use_container_width=True)
 
 with tabs[4]:
     st.markdown("#### Clause-traceable ring grading")
