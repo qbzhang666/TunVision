@@ -1,0 +1,4 @@
+dataset_id,name,source_type,description,default_training_pool,point_cloud_status,standards_status
+art,Australian Reference Tunnel (ART),Reference scan,Supplementary structural point-cloud source without reported leakage,S3DIS + ART,Restricted sample / user supplied,CJJ/T + GB rule base
+s3dis,Nanjing Metro Line 2 (S3DIS Leakage),Operational benchmark,Annotated operational shield-tunnel leakage dataset used for training and held-out testing,S3DIS,Public benchmark / user supplied,CJJ/T + GB rule base
+heldout,Tunnel 8 and Tunnel 9 held-out case study,Decision case,Bundled ring and leakage evidence used for prescription demonstration,S3DIS,Bundled derived indicators,CJJ/T + GB rule base

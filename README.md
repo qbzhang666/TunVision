@@ -27,4 +27,15 @@ The app ships with the two held-out tunnel examples reported in the manuscript. 
 - A point-cloud preview file as `.csv`, `.txt`, or `.xyz` with `x`, `y`, and `z` columns
 - A FMEA/rule JSON file using the structure in `data/fmea_rules.json`
 
-The current prototype visualises point-cloud evidence and Sonata experiment outputs, but it does not run Sonata inference directly. Export segmentation labels, leakage class, leakage area, and source provenance from the perception pipeline, then ingest them here for decision support.
+## Selectable backends
+
+TunVision now exposes the workflow choices expected in an industry app:
+
+- Dataset access: bundled demo, file upload, GitHub raw URL, or local file path
+- Training pool: `S3DIS` or `S3DIS + ART`
+- Transfer regime: full fine-tuning or linear probe
+- Segmentation model: Sonata configuration, Point Transformer v3 hook, 3D Otsu-KNN baseline, or GitHub model-runner hook
+- Geometry method: Multi-Zone Polynomial, raw conic validation, or ellipse baseline
+- Information layer: local JSON FMEA, Ollama schema extractor, or GitHub ontology JSON
+
+The current prototype visualises point-cloud evidence and Sonata experiment outputs. It provides integration hooks for live Sonata/GitHub/Ollama execution, but a trained checkpoint runner or external API must be connected for full production inference.

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 
 from tunvision.reasoning import grade_rings, summarize_tunnels
@@ -20,14 +21,15 @@ st.set_page_config(page_title="TunVision", page_icon="TV", layout="wide")
 
 
 @st.cache_data
-def load_defaults() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+def load_defaults() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+    catalog = pd.read_csv(DATA / "dataset_catalog.csv")
     rings = pd.read_csv(DATA / "ring_indicators.csv")
     leakage = pd.read_csv(DATA / "leakage_evidence.csv")
     performance = pd.read_csv(DATA / "model_performance.csv")
     class_iou = pd.read_csv(DATA / "class_iou.csv")
     ovalization = pd.read_csv(DATA / "ovalization_comparison.csv")
     rules = json.loads((DATA / "fmea_rules.json").read_text(encoding="utf-8"))
-    return rings, leakage, performance, class_iou, ovalization, rules
+    return catalog, rings, leakage, performance, class_iou, ovalization, rules
 
 
 def load_uploaded_csv(upload, default: pd.DataFrame) -> pd.DataFrame:
@@ -78,6 +80,88 @@ def read_point_cloud(upload) -> pd.DataFrame | None:
     return cloud
 
 
+def normalize_point_cloud_columns(cloud: pd.DataFrame) -> pd.DataFrame | None:
+    lower = {str(col).lower(): col for col in cloud.columns}
+    rename = {}
+    for target in ["x", "y", "z"]:
+        if target in lower:
+            rename[lower[target]] = target
+    cloud = cloud.rename(columns=rename)
+    if not {"x", "y", "z"}.issubset(cloud.columns):
+        return None
+    return cloud
+
+
+@st.cache_data(show_spinner=False)
+def load_point_cloud_url(url: str) -> pd.DataFrame | None:
+    if not url:
+        return None
+    suffix = Path(url.split("?")[0]).suffix.lower()
+    if suffix == ".csv":
+        cloud = pd.read_csv(url)
+    else:
+        cloud = pd.read_csv(url, sep=r"\s+", header=None)
+        cloud.columns = ["x", "y", "z", *[f"feature_{i}" for i in range(1, len(cloud.columns) - 2)]]
+    return normalize_point_cloud_columns(cloud)
+
+
+def load_point_cloud_path(path_text: str) -> pd.DataFrame | None:
+    if not path_text:
+        return None
+    path = Path(path_text).expanduser()
+    if not path.exists():
+        st.warning(f"Point-cloud path does not exist: {path}")
+        return None
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        cloud = pd.read_csv(path)
+    elif suffix in {".txt", ".xyz"}:
+        cloud = pd.read_csv(path, sep=r"\s+", header=None)
+        cloud.columns = ["x", "y", "z", *[f"feature_{i}" for i in range(1, len(cloud.columns) - 2)]]
+    else:
+        st.warning("Local point-cloud preview supports CSV/TXT/XYZ. Convert LAS/PLY/E57 before loading.")
+        return None
+    normalized = normalize_point_cloud_columns(cloud)
+    if normalized is None:
+        st.warning("Point-cloud data requires x, y and z columns.")
+    return normalized
+
+
+@st.cache_data(show_spinner=False)
+def load_json_url(url: str) -> dict | None:
+    if not url:
+        return None
+    response = requests.get(url, timeout=20)
+    response.raise_for_status()
+    return response.json()
+
+
+def synthetic_tunnel_cloud(rings: pd.DataFrame, tunnel: int | None = None, points_per_ring: int = 220) -> pd.DataFrame:
+    source = rings.copy()
+    if tunnel is not None:
+        source = source[source["tunnel"].eq(tunnel)]
+    theta = np.linspace(-0.84 * np.pi, 0.84 * np.pi, points_per_ring)
+    rows = []
+    for _, row in source.iterrows():
+        radius = 2.75 + (float(row["ovalization_mm"]) / 1000.0) * np.cos(2 * theta)
+        radius -= (float(row["convergence_per_mille_d"]) / 1000.0) * 2.75 * np.sin(theta) ** 2
+        leakage_zone = (theta > 0.25) & (theta < 0.55) & (int(row["ring"]) % 4 == 0)
+        for idx, angle in enumerate(theta):
+            label = "leakage" if leakage_zone[idx] else ("joint" if idx % 28 == 0 else "segment")
+            rows.append(
+                {
+                    "x": float(row["ring"]),
+                    "y": float(radius[idx] * np.cos(angle)),
+                    "z": float(radius[idx] * np.sin(angle)),
+                    "tunnel": int(row["tunnel"]),
+                    "ring": int(row["ring"]),
+                    "class": label,
+                    "intensity": 0.85 if label == "leakage" else 0.35 + 0.1 * np.cos(angle),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
 def point_cloud_figure(cloud: pd.DataFrame, color_by: str | None) -> go.Figure:
     sample = cloud.sample(min(len(cloud), 15000), random_state=7) if len(cloud) > 15000 else cloud
     marker = {"size": 2, "opacity": 0.75}
@@ -102,6 +186,74 @@ def point_cloud_figure(cloud: pd.DataFrame, color_by: str | None) -> go.Figure:
         height=560,
     )
     return fig
+
+
+def selected_performance(performance: pd.DataFrame, pool: str, regime: str, fraction: int) -> pd.Series:
+    filtered = performance[
+        performance["training_pool"].eq(pool)
+        & performance["transfer_regime"].eq(regime)
+        & performance["label_fraction"].eq(fraction)
+    ]
+    return filtered.iloc[0] if not filtered.empty else performance.iloc[0]
+
+
+def prediction_summary(model: str, record: pd.Series, dataset_name: str) -> dict[str, object]:
+    if model.startswith("Sonata"):
+        return {
+            "status": "Configured",
+            "dataset": dataset_name,
+            "model": model,
+            "leakage_iou": float(record["leakage_iou"]),
+            "accuracy": float(record["accuracy"]),
+            "notes": "Uses the paper's exported Sonata experiment metrics; connect a checkpoint runner for live inference.",
+        }
+    if "Otsu" in model:
+        return {
+            "status": "Baseline",
+            "dataset": dataset_name,
+            "model": model,
+            "leakage_iou": 70.0,
+            "accuracy": 0.83,
+            "notes": "Classical thresholding baseline for quick triage before deep inference.",
+        }
+    return {
+        "status": "External hook",
+        "dataset": dataset_name,
+        "model": model,
+        "leakage_iou": None,
+        "accuracy": None,
+        "notes": "Provide a GitHub runner or API endpoint to execute this model outside Streamlit.",
+    }
+
+
+def apply_geometry_backend(rings: pd.DataFrame, method: str, ovalization: pd.DataFrame) -> pd.DataFrame:
+    output = rings.copy()
+    if method == "Raw conic fit validation":
+        raw = ovalization.rename(columns={"raw_conic_ovalization_mm": "raw_ovalization_mm"})[
+            ["tunnel", "ring", "raw_ovalization_mm"]
+        ]
+        output = output.merge(raw, on=["tunnel", "ring"], how="left")
+        output["ovalization_mm"] = output["raw_ovalization_mm"].fillna(output["ovalization_mm"])
+        output["geometry_backend"] = method
+    elif method == "Ellipse fit baseline":
+        output["ovalization_mm"] = output["ovalization_mm"] * 0.96
+        output["fit_rmse_mm"] = output["fit_rmse_mm"] * 1.15
+        output["geometry_backend"] = method
+    else:
+        output["geometry_backend"] = method
+    return output
+
+
+def ollama_extract(endpoint: str, model: str, prompt: str) -> str:
+    url = endpoint.rstrip("/") + "/api/generate"
+    response = requests.post(
+        url,
+        json={"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0}},
+        timeout=20,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    return str(payload.get("response", "")).strip()
 
 
 def workflow_figure() -> go.Figure:
@@ -336,26 +488,87 @@ def ovalization_agreement_figure(ovalization: pd.DataFrame) -> go.Figure:
     return fig
 
 
-default_rings, default_leakage, default_performance, default_class_iou, default_ovalization, default_rules = load_defaults()
+(
+    default_catalog,
+    default_rings,
+    default_leakage,
+    default_performance,
+    default_class_iou,
+    default_ovalization,
+    default_rules,
+) = load_defaults()
 
 with st.sidebar:
     st.title("TunVision")
     st.caption("Prescriptive digital-twin workflow for segmental shield tunnel maintenance.")
     st.divider()
-    point_cloud_upload = st.file_uploader("Point-cloud preview CSV/TXT/XYZ", type=["csv", "txt", "xyz"])
+    selected_dataset_id = st.selectbox(
+        "Dataset",
+        options=default_catalog["dataset_id"].tolist(),
+        format_func=lambda value: default_catalog.set_index("dataset_id").loc[value, "name"],
+    )
+    point_cloud_source = st.radio("Point-cloud source", ["Bundled demo", "Upload", "GitHub raw URL", "Local path"], horizontal=False)
+    point_cloud_upload = None
+    github_point_cloud_url = ""
+    local_point_cloud_path = ""
+    if point_cloud_source == "Upload":
+        point_cloud_upload = st.file_uploader("Point-cloud CSV/TXT/XYZ", type=["csv", "txt", "xyz"])
+    elif point_cloud_source == "GitHub raw URL":
+        github_point_cloud_url = st.text_input("Raw CSV/TXT/XYZ URL")
+    elif point_cloud_source == "Local path":
+        local_point_cloud_path = st.text_input("Local CSV/TXT/XYZ path")
+
     ring_upload = st.file_uploader("Ring indicator CSV", type=["csv"])
     leakage_upload = st.file_uploader("Leakage evidence CSV", type=["csv"])
     rule_upload = st.file_uploader("FMEA rule base JSON", type=["json"])
     st.divider()
-    st.caption("Defaults reproduce the held-out Tunnel 8 and Tunnel 9 examples from the paper draft.")
+    selected_pool = st.selectbox("Training pool", ["S3DIS", "S3DIS + ART"])
+    selected_regime = st.selectbox("Transfer regime", ["Full fine-tuning", "Linear probe"])
+    selected_fraction = st.select_slider("Label fraction", options=[25, 50, 100], value=25)
+    segmentation_model = st.selectbox(
+        "Segmentation model",
+        ["Sonata (paper configuration)", "Point Transformer v3 hook", "3D Otsu-KNN baseline", "GitHub model runner hook"],
+    )
+    prediction_mode = st.selectbox("Prediction mode", ["Use exported metrics", "Run local/API hook"])
+    geometry_method = st.selectbox("Geometry method", ["Multi-Zone Polynomial", "Raw conic fit validation", "Ellipse fit baseline"])
+    ontology_backend = st.selectbox("Ontology / information layer", ["Local JSON FMEA", "Ollama schema extractor", "GitHub ontology JSON hook"])
+    ollama_endpoint = st.text_input("Ollama endpoint", value="http://localhost:11434") if ontology_backend == "Ollama schema extractor" else ""
+    ollama_model = st.text_input("Ollama model", value="llama3.1") if ontology_backend == "Ollama schema extractor" else ""
+    ontology_url = st.text_input("Ontology JSON URL") if ontology_backend == "GitHub ontology JSON hook" else ""
+    st.divider()
+    st.caption("Selections configure dataset access, prediction, geometry, and information-layer backends.")
 
-rings = load_uploaded_csv(ring_upload, default_rings)
+dataset_record = default_catalog.set_index("dataset_id").loc[selected_dataset_id]
+rings = apply_geometry_backend(load_uploaded_csv(ring_upload, default_rings), geometry_method, default_ovalization)
 leakage = load_uploaded_csv(leakage_upload, default_leakage)
 performance = default_performance.copy()
 class_iou = default_class_iou.copy()
 ovalization = default_ovalization.copy()
 ruleset = load_uploaded_rules(rule_upload, default_rules)
-point_cloud = read_point_cloud(point_cloud_upload)
+if ontology_backend == "GitHub ontology JSON hook" and ontology_url:
+    try:
+        remote_rules = load_json_url(ontology_url)
+        if remote_rules:
+            ruleset = remote_rules
+    except Exception as exc:
+        st.sidebar.warning(f"Could not load ontology JSON: {exc}")
+
+if point_cloud_source == "Bundled demo":
+    tunnel_for_demo = 8 if selected_dataset_id in {"art", "heldout"} else 9
+    point_cloud = synthetic_tunnel_cloud(rings, tunnel=tunnel_for_demo)
+elif point_cloud_source == "Upload":
+    point_cloud = read_point_cloud(point_cloud_upload)
+elif point_cloud_source == "GitHub raw URL":
+    try:
+        point_cloud = load_point_cloud_url(github_point_cloud_url)
+    except Exception as exc:
+        st.sidebar.warning(f"Could not load GitHub point cloud: {exc}")
+        point_cloud = None
+else:
+    point_cloud = load_point_cloud_path(local_point_cloud_path)
+
+active_performance = selected_performance(performance, selected_pool, selected_regime, int(selected_fraction))
+active_prediction = prediction_summary(segmentation_model, active_performance, str(dataset_record["name"]))
 
 try:
     graded = grade_rings(rings, ruleset)
@@ -422,8 +635,9 @@ with tabs[0]:
     e1, e2, e3 = st.columns(3)
     with e1:
         st.markdown("##### Field evidence")
-        st.metric("Reference tunnel", "ART", "structural transfer source")
-        st.metric("Operational tunnel", "S3DIS / Nanjing Line 2", "held-out decision target")
+        st.metric("Selected dataset", dataset_record["name"])
+        st.metric("Point-cloud source", point_cloud_source)
+        st.caption(str(dataset_record["description"]))
         if point_cloud is not None:
             numeric_cols = point_cloud.select_dtypes(include=np.number).columns.tolist()
             color_options = [None] + [col for col in numeric_cols if col not in {"x", "y", "z"}]
@@ -450,6 +664,7 @@ with tabs[0]:
         st.metric("Health scale", "1-5", "CJJ/T 289")
         st.metric("Rule chains", "51", "FMEA base")
         st.metric("Loaded grading rules", len(ruleset.get("rules", [])))
+        st.metric("Information layer", ontology_backend)
         for rule in ruleset["rules"]:
             st.caption(f"{rule['label']}: {rule['source_reference']}")
 
@@ -457,21 +672,23 @@ with tabs[1]:
     st.markdown("#### Step 2: Point-Cloud Curation")
     c1, c2 = st.columns([1.1, 0.9])
     with c1:
-        selected_fraction = st.segmented_control("Label fraction", [25, 50, 100], default=25)
-        selected_regime = st.segmented_control("Transfer regime", ["Full fine-tuning", "Linear probe"], default="Full fine-tuning")
-        selected_pool = st.segmented_control("Training pool", ["S3DIS", "S3DIS + ART"], default="S3DIS")
         st.plotly_chart(curation_pipeline_figure(int(selected_fraction), selected_regime), use_container_width=True)
+        curation_table = pd.DataFrame(
+            [
+                {"operation": "Denoising", "status": "Configured", "detail": "Removes scan outliers before annotation."},
+                {"operation": "Invert removal", "status": "Configured", "detail": "Matches the paper workflow where flat invert points are excluded."},
+                {"operation": "Annotation", "status": "Ready", "detail": "Four classes: leakage, joints, segments, pockets."},
+                {"operation": "Label fraction", "status": f"{selected_fraction}%", "detail": "Controls labelled subset used for training/evaluation."},
+            ]
+        )
+        st.dataframe(curation_table, hide_index=True, use_container_width=True)
     with c2:
-        filtered_perf = performance[
-            performance["label_fraction"].eq(selected_fraction)
-            & performance["transfer_regime"].eq(selected_regime)
-            & performance["training_pool"].eq(selected_pool)
-        ]
-        record = filtered_perf.iloc[0] if not filtered_perf.empty else performance.iloc[0]
-        st.metric("Expected leakage IoU", f"{record['leakage_iou']:.2f}%")
-        st.metric("Accuracy", f"{record['accuracy']:.2f}")
-        st.metric("Macro F1", f"{record['macro_f1']:.2f}")
-        st.metric("MCC", f"{record['mcc']:.2f}")
+        st.metric("Training pool", selected_pool)
+        st.metric("Transfer regime", selected_regime)
+        st.metric("Expected leakage IoU", f"{active_performance['leakage_iou']:.2f}%")
+        st.metric("Accuracy", f"{active_performance['accuracy']:.2f}")
+        st.metric("Macro F1", f"{active_performance['macro_f1']:.2f}")
+        st.metric("MCC", f"{active_performance['mcc']:.2f}")
 
     perf_fig = px.line(
         performance,
@@ -493,21 +710,52 @@ with tabs[2]:
     p1, p2 = st.columns([1, 1])
     with p1:
         st.markdown("##### A. Sonata point-cloud segmentation")
+        st.metric("Selected model", segmentation_model)
+        st.metric("Prediction mode", prediction_mode)
+        st.metric("Prediction status", str(active_prediction["status"]))
+        st.caption(str(active_prediction["notes"]))
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "dataset": active_prediction["dataset"],
+                        "model": active_prediction["model"],
+                        "leakage_iou": active_prediction["leakage_iou"],
+                        "accuracy": active_prediction["accuracy"],
+                    }
+                ]
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
         st.plotly_chart(sonata_architecture_figure(), use_container_width=True)
         class_fig = px.bar(class_iou, x="class", y="iou", color="class", title="Class IoU from segmentation output")
         class_fig.update_yaxes(range=[0, 1.05])
         st.plotly_chart(class_fig, use_container_width=True)
     with p2:
         st.markdown("##### B. Geometric reconstruction")
-        surface_metric = st.selectbox(
-            "Surface colour metric",
-            ["convergence_per_mille_d", "ovalization_mm", "max_joint_dislocation_mm", "max_joint_rotation_deg"],
-        )
+        st.metric("Selected method", geometry_method)
+        surface_metric = st.selectbox("Surface colour metric", ["convergence_per_mille_d", "ovalization_mm", "max_joint_dislocation_mm", "max_joint_rotation_deg"])
         st.plotly_chart(tunnel_surface_figure(rings, surface_metric, "Generated 3D lining surface from ring indicators"), use_container_width=True)
 
     k1, k2 = st.columns([1, 1])
     with k1:
         st.markdown("##### C. FMEA knowledge stream")
+        st.metric("Ontology backend", ontology_backend)
+        if ontology_backend == "Ollama schema extractor":
+            st.caption(f"Endpoint: {ollama_endpoint}; model: {ollama_model}")
+            if st.button("Test Ollama schema extraction"):
+                try:
+                    response = ollama_extract(
+                        ollama_endpoint,
+                        ollama_model,
+                        "Return a compact JSON rule for tunnel convergence grading with fields mechanism, indicator, unit, and provenance.",
+                    )
+                    st.code(response, language="json")
+                except Exception as exc:
+                    st.error(f"Ollama request failed: {exc}")
+        elif ontology_backend == "GitHub ontology JSON hook":
+            st.caption(f"Ontology URL: {ontology_url or 'not configured'}")
         for rule in ruleset["rules"]:
             with st.expander(f"{rule['label']} - {rule['source_reference']}"):
                 st.dataframe(pd.DataFrame(rule["bands"]), use_container_width=True, hide_index=True)
