@@ -302,7 +302,7 @@ def workflow_figure() -> go.Figure:
         fig.add_annotation(x=(ax + x) / 2, y=(ay + y) / 2 + 0.045, text=f"<i>{label}</i>", showarrow=False, font={"size": 12, "color": "#475569"})
 
     fig.add_shape(type="circle", x0=0.455, x1=0.545, y0=0.455, y1=0.545, line={"color": "#64748b", "width": 2}, fillcolor="#ffffff")
-    fig.add_annotation(x=0.5, y=0.5, text="<b>DT<br>Loop</b>", showarrow=False, font={"size": 13, "color": "#0f172a"})
+    fig.add_annotation(x=0.5, y=0.5, text="<b>TunVision</b>", showarrow=False, font={"size": 13, "color": "#0f172a"})
     fig.update_xaxes(visible=False, range=[0, 1])
     fig.update_yaxes(visible=False, range=[0.05, 1])
     fig.update_layout(height=520, margin={"l": 10, "r": 10, "t": 20, "b": 10}, plot_bgcolor="white")
